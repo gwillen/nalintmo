@@ -79,7 +79,7 @@ do_eq :: Sexp -> Sexp -> Env -> (Sexp, Env)
 do_eq lhs rhs env = let
   (lhs', _) = do_eval lhs env
   (rhs', _) = do_eval rhs env
-  in case lhs == rhs of
+  in case lhs' == rhs' of
     False -> (Nil, env)
     True -> ((Sym "true"), env)
     
