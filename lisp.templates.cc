@@ -72,6 +72,43 @@ template <typename k, typename env, typename heap> struct env_lookup {
   typedef typename lookup<k2, heap>::r_val r_val;
 };
 
+// Forward declare eval for use in special forms:
+
+template <typename exp, typename env, typename heap, int ctr> struct eval;
+
+// Special forms
+
+template <typename body, typename env, typename heap, int ctr> struct do_progn {};
+template <typename env, typename heap, int ctr>
+struct do_progn<Nil, env, heap, ctr> {
+  typedef Nil r_val;
+  typedef env r_env;
+  typedef heap r_heap;
+  static const int r_ctr = ctr;
+};
+template <typename first, typename env, typename heap, int ctr>
+struct do_progn<Cons<first, Nil>, env, heap, ctr> {
+  typedef eval<first, env, heap, ctr> result; 
+  typedef typename result::r_val r_val;
+  typedef typename result::r_env r_env;
+  typedef typename result::r_heap r_heap;
+  static const int r_ctr = ctr;
+};
+template <typename first, typename rest, typename env, typename heap, int ctr>
+struct do_progn<Cons<first, rest>, env, heap, ctr> {
+  typedef eval<first, env, heap, ctr> first_result; 
+  // Discard result::r_val per the contract of progn.
+  typedef typename first_result::r_env new_env;
+  typedef typename first_result::r_heap new_heap;
+  static const int new_ctr = first_result::r_ctr;
+
+  typedef do_progn<rest, new_env, new_heap, new_ctr> final_result;
+  typedef typename final_result::r_val r_val;
+  typedef typename final_result::r_env r_env;
+  typedef typename final_result::r_heap r_heap;
+  static const int r_ctr = final_result::r_ctr;
+};
+
 template <typename exp, typename env, typename heap, int ctr> struct eval {};
 template <typename env, typename heap, int ctr> struct eval<True, env, heap, ctr> {
   typedef True r_val;
@@ -96,6 +133,19 @@ template <typename env, typename heap, int ctr, char name[]> struct eval<Sym<nam
   typedef env r_env;
   typedef heap r_heap;
   static const int r_ctr = ctr;
+};
+// No eval case for Gensym, because we only use them as heap keys; they should
+// never appear in code.
+// No eval case for Func either. In real Lisp they evaluate to themselves, but
+// they should never appear in code either, unless you abuse #., which I
+// haven't got.
+template <typename body, typename env, typename heap, int ctr>
+struct eval<Cons<Sym<progn>, body>, env, heap, ctr> {
+  typedef do_progn<body, env, heap, ctr> result;
+  typedef typename result::r_val r_val;
+  typedef typename result::r_env r_env;
+  typedef typename result::r_heap r_heap;
+  static const int r_ctr = result::r_ctr;
 };
 
 /*
