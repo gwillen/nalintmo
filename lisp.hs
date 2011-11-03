@@ -3,7 +3,9 @@ import Data.Maybe
 
 instance Show (Sexp -> Sexp) where
   show _ = "<function>"
-data Sexp = Nil | Cons Sexp Sexp | Num Int | Sym String | Func (Sexp -> Sexp) deriving (Show)
+instance Eq (Sexp -> Sexp) where
+  (==) _ _ = False
+data Sexp = Nil | Cons Sexp Sexp | Num Int | Sym String | Func (Sexp -> Sexp) deriving (Show, Eq)
 type Env = [(String, Sexp)]
 
 get_var :: String -> Env -> Maybe Sexp
@@ -65,6 +67,14 @@ do_cond (Cons (Cons cond (Cons result Nil)) rest) env =
     (Nil, _) -> do_cond rest env
     (_, _) -> do_eval result env
 
+do_eq :: Sexp -> Sexp -> Env -> (Sexp, Env)
+do_eq lhs rhs env = let
+  (lhs', _) = do_eval lhs env
+  (rhs', _) = do_eval rhs env
+  in case lhs == rhs of
+    False -> (Nil, env)
+    True -> ((Sym "true"), env)
+    
 do_eval :: Sexp -> Env -> (Sexp, Env)
 do_eval (Num n) env = (Num n, env)
 do_eval (Sym s) env = (case get_var s env of Just x -> x ; Nothing -> error "Bad var", env)
@@ -77,6 +87,7 @@ do_eval (Cons (Sym "define") (Cons (Sym name) val)) env = do_define name val env
 do_eval (Cons (Sym "define") (Cons (Cons (Sym name) params) body)) env = do_define_func name params body env
 do_eval (Cons (Sym "quote") (Cons arg Nil)) env = (arg, env)
 do_eval (Cons (Sym "cond") body) env = do_cond body env
+do_eval (Cons (Sym "eq") (Cons lhs (Cons rhs Nil))) env = do_eq rhs lhs env
 do_eval (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env) args env
 
 
@@ -84,4 +95,6 @@ do_eval (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env)
 
 (progn
   (define (fact n)
+    (cond
+      ((eq n 0)
 -}
