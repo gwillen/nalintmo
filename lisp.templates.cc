@@ -20,9 +20,14 @@ template <int ctr> struct gensym {
   static const int r_ctr = ctr + 1;
 };
 
-template <typename k, typename heap> struct heap_lookup {};
-template <typename k, typename v, typename rest> struct heap_lookup<k, Cons<Cons<k, v>, rest> > {
+template <typename k, typename heap> struct lookup {};
+template <typename k, typename v, typename rest>
+struct lookup<k, Cons<Cons<k, v>, rest> > {
   typedef v r_val;
+};
+template <typename k1, typename k2, typename v, typename rest>
+struct lookup<k1, Cons<Cons<k2, v>, rest> > {
+  typedef struct lookup<k1, rest>::r_val r_val;
 };
 
 template <typename exp, typename env, typename heap, int ctr> struct eval {};
@@ -39,7 +44,11 @@ int main() {
   eval<Nil, Nil, Nil, 0>::r_val a;
   //a.print();
   eq<Cons<True, True>, Cons<True, True> >::r_val b;
-  b.print();
+  //b.print();
+
+  //lookup<Gensym<1>, Cons<Cons<Gensym<2>, True>, Cons<Cons<Gensym<3>, True>, Nil> > >::r_val y;
+  y.print();
+
   printf("\n");
 
   Sym<hello> x;
