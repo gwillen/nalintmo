@@ -145,5 +145,6 @@ test_source = (
 
 {-
 *Main> do_eval (input_sexp test_source) []
-(Num *** Exception: lisp.hs:99:3-33: Irrefutable pattern failed for pattern (Main.Num lhs', _)
+...
+(Num 120,[("fact",Func <function>)])
 -}
