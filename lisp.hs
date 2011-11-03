@@ -102,7 +102,7 @@ do_times lhs rhs env = let
 
 do_eval :: Sexp -> Env -> (Sexp, Env)
 do_eval (Num n) env = (Num n, env)
-do_eval (Sym s) env = (case get_var s env of Just x -> x ; Nothing -> error "Bad var", env)
+do_eval (Sym s) env = (case get_var s env of Just x -> x ; Nothing -> error ("Bad var: " ++ s ++ " with env " ++ (show env)), env)
 do_eval Nil env = (Nil, env)
 do_eval (Cons (Sym "car") (Cons x Nil)) env = let (r, env') = do_eval x env in (do_car r, env')
 do_eval (Cons (Sym "cdr") (Cons x Nil)) env = let (r, env') = do_eval x env in (do_cdr r, env')
@@ -125,7 +125,7 @@ do_eval (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env)
   (define (fact n)
     (cond
       ((eq n 0) 1)
-      ('otherwise (* n (fact (- n 1))))))
+      ((quote otherwise) (* n (fact (- n 1))))))
   (fact 5))
 
 -}
@@ -135,10 +135,10 @@ test_source = (
     L [S "define", L [S "fact", S "n"],
       L [(S "cond"),
         L [L [S "eq", S "n", N 0], N 1],
-        L [S "otherwise", L [S "*", S "n", L [S "fact", L [S "-", S "n", N 1]]]]]],
+        L [L [S "quote", S "otherwise"], L [S "*", S "n", L [S "fact", L [S "-", S "n", N 1]]]]]],
     L [S "fact", N 5]])
 
 {-
 *Main> do_eval (input_sexp test_source) []
-(*** Exception: Bad var
+(Num *** Exception: lisp.hs:99:3-33: Irrefutable pattern failed for pattern (Main.Num lhs', _)
 -}
