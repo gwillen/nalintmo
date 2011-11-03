@@ -1,24 +1,24 @@
 #include <stdio.h>
 
-struct True { void print() { printf("True"); } };
-struct Nil { void print() { printf("Nil"); } };
+struct True { static void print() { printf("True"); } };
+struct Nil { static void print() { printf("Nil"); } };
 template <typename car, typename cdr> struct Cons {
-  void print() {
+  static void print() {
     printf("Cons(");
-    car a; a.print();
+    car::print();
     printf(", ");
-    cdr b; b.print();
+    cdr::print();
     printf(")");
   }
 };
 template <int n> struct Int {
-  void print() { printf("Int(%d)", n); } };
+  static void print() { printf("Int(%d)", n); } };
 template <char name[80]> struct Sym {
-  void print() { printf("Sym(%s)", name); } };
+  static void print() { printf("Sym(%s)", name); } };
 template <int ctr> struct Gensym {
-  void print() { printf("Gensym(%d)", ctr); } };
+  static void print() { printf("Gensym(%d)", ctr); } };
 template <typename env, typename params, typename body> struct Func {
-  void print() { printf("<function>"); } };
+  static void print() { printf("<function>"); } };
 
 template <typename x, typename y> struct eq {
   typedef Nil r_val;
@@ -55,13 +55,13 @@ char hello[] = "hello";
 int main() {
   eval<Nil, Nil, Nil, 0>::r_val a;
   //a.print();
-  eq<Cons<True, True>, Cons<True, True> >::r_val b;
-  //b.print();
+  //eq<Cons<True, True>, Cons<True, True> >::r_val::print();
+  Cons<True, True>::print();
 
   //lookup<Gensym<1>, Cons<Cons<Gensym<2>, True>, Cons<Cons<Gensym<3>, True>, Nil> > >::r_val y;
   //y.print();
 
   printf("\n");
 
-  Sym<hello> x;
+  //Sym<hello> x;
 }
