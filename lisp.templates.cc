@@ -238,6 +238,13 @@ struct eval<Cons<Sym<define>, Cons<Cons<Sym<name>, params>, body> >, env, heap, 
   typedef do_define_func<Sym<name>, params, body, env, heap, ctr> result;
   RETURN(result);
 };
+template <typename exp, typename env, typename heap, int ctr>
+struct eval<Cons<Sym<quote>, Cons<exp, Nil> >, env, heap, ctr> {
+  typedef exp r_val;
+  typedef env r_env;
+  typedef heap r_heap;
+  static const int r_ctr = ctr;
+};
 
 /*
 Structure of the heap: map gensymm'ed keys lead to values
