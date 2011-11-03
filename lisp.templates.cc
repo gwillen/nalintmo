@@ -109,6 +109,15 @@ struct do_progn<Cons<first, rest>, env, heap, ctr> {
   static const int r_ctr = final_result::r_ctr;
 };
 
+template <typename params, typename body, typename env, typename heap, int ctr>
+struct do_lambda {
+  typedef Func<env, params, body> r_val;
+  typedef env r_env;
+  typedef heap r_heap;
+  static const int r_ctr = ctr;
+};
+
+
 template <typename exp, typename env, typename heap, int ctr> struct eval {};
 template <typename env, typename heap, int ctr> struct eval<True, env, heap, ctr> {
   typedef True r_val;
@@ -134,6 +143,17 @@ template <typename env, typename heap, int ctr, char name[]> struct eval<Sym<nam
   typedef heap r_heap;
   static const int r_ctr = ctr;
 };
+
+// Helper macro for the special form cases below. Normally it would be bad form
+// not to wrap this in do{}while(0) or ({}), except these are typedefs so none
+// of that would be valid here, and you can't really use this wrong anyway
+// since you can't put it in a block.
+#define RETURN(x) \
+  typedef typename x::r_val r_val; \
+  typedef typename x::r_env r_env; \
+  typedef typename x::r_heap r_heap; \
+  static const int r_ctr = x::r_ctr
+
 // No eval case for Gensym, because we only use them as heap keys; they should
 // never appear in code.
 // No eval case for Func either. In real Lisp they evaluate to themselves, but
@@ -142,10 +162,12 @@ template <typename env, typename heap, int ctr, char name[]> struct eval<Sym<nam
 template <typename body, typename env, typename heap, int ctr>
 struct eval<Cons<Sym<progn>, body>, env, heap, ctr> {
   typedef do_progn<body, env, heap, ctr> result;
-  typedef typename result::r_val r_val;
-  typedef typename result::r_env r_env;
-  typedef typename result::r_heap r_heap;
-  static const int r_ctr = result::r_ctr;
+  RETURN(result);
+};
+template <typename params, typename body, typename env, typename heap, int ctr>
+struct eval<Cons<Sym<lambda>, Cons<params, body> >, env, heap, ctr> {
+  typedef do_lambda<params, body, env, heap, ctr> result;
+  RETURN(result);
 };
 
 /*
