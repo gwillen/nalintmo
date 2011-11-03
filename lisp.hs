@@ -1,4 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
+import Data.Maybe
+
 instance Show (Sexp -> Sexp) where
   show _ = "<function>"
 data Sexp = Nil | Cons Sexp Sexp | Num Int | Sym String | Func (Sexp -> Sexp) deriving (Show)
@@ -20,8 +22,8 @@ do_progn Nil env = (Nil, env)
 do_progn (Cons x Nil) env = do_eval x env
 do_progn (Cons x xs) env = let (_, env') = do_eval x env in do_progn xs env'
 
-do_apply :: Sexp -> Sexp
-do_apply _ = Nil
+do_apply :: Sexp -> Sexp -> Env -> (Sexp, Env)
+do_apply (Func f) args env = (f args, env) 
 
 bind_params :: Sexp -> Sexp -> Env -> Env
 bind_params Nil Nil env = env
@@ -35,8 +37,16 @@ do_lambda params body env = (Func (\args -> fst $do_eval (Cons (Sym "progn") bod
                                                          (bind_params params args env)),
                              env) 
 
-do_define :: Sexp -> Sexp
-do_define _ = Nil
+-- As above we discard the environment resulting from the body of the define.
+do_define :: String -> Sexp -> Env -> (Sexp, Env)
+do_define name val env = (Nil, (name, fst $ do_eval val env) : env)
+
+-- Here we are doing a clever haskellism defining evn' recursively in terms of
+--  itself. I have no idea whether that works.
+do_define_func :: String -> Sexp -> Sexp -> Env -> (Sexp, Env)
+do_define_func name params body env =
+  let env' = (name, fst $ do_lambda params body env') : env
+  in (Nil, env')
 
 do_car :: Sexp -> Sexp
 do_car (Cons x _) = x
@@ -54,3 +64,7 @@ do_eval (Cons (Sym "car") (Cons x Nil)) env = let (r, env') = do_eval x env in (
 do_eval (Cons (Sym "cdr") (Cons x Nil)) env = let (r, env') = do_eval x env in (do_cdr r, env')
 do_eval (Cons (Sym "progn") x) env = do_progn x env
 do_eval (Cons (Sym "lambda") (Cons params body)) env = do_lambda params body env
+do_eval (Cons (Sym "define") (Cons (Sym name) val)) env = do_define name val env
+do_eval (Cons (Sym "define") (Cons (Cons (Sym name) params) body)) env = do_define_func name params body env
+do_eval (Cons (Sym "quote") (Cons arg Nil)) env = (arg, env)
+do_eval (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env) args env
