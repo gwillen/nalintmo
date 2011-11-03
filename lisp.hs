@@ -101,7 +101,9 @@ do_times lhs rhs env = let
   (Num rhs', _) = do_eval rhs env
   in (Num (lhs' * rhs'), env)
 
-do_eval exp env = (System.IO.Unsafe.unsafePerformIO (print ((show exp) ++ " -- " ++ (show env)))) `seq` (do_eval_helper exp env)
+do_eval exp env = (System.IO.Unsafe.unsafePerformIO (print ((show exp) ++ " -- " ++ (show env)))) `seq` 
+                  (let result = do_eval_helper exp env
+                   in System.IO.Unsafe.unsafePerformIO (print (" ==> " ++ (show (fst result)))) `seq` result)
 
 do_eval_helper :: Sexp -> Env -> (Sexp, Env)
 do_eval_helper (Num n) env = (Num n, env)
