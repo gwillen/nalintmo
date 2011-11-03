@@ -6,7 +6,14 @@ instance Show (Sexp -> Sexp) where
 instance Eq (Sexp -> Sexp) where
   (==) _ _ = False
 data Sexp = Nil | Cons Sexp Sexp | Num Int | Sym String | Func (Sexp -> Sexp) deriving (Show, Eq)
+data ConvenienceSexp = L [ConvenienceSexp] | N Int | S String
 type Env = [(String, Sexp)]
+
+input_sexp :: ConvenienceSexp -> Sexp
+input_sexp (N x) = Num x
+input_sexp (S x) = Sym x
+input_sexp (L []) = Nil
+input_sexp (L (x:xs)) = (Cons (input_sexp x) (input_sexp (L xs)))
 
 get_var :: String -> Env -> Maybe Sexp
 get_var _ [] = Nothing
@@ -118,7 +125,11 @@ do_eval (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env)
   (define (fact n)
     (cond
       ((eq n 0) 1)
-      ('otherwise (* n (fact (- n 1)))))))
+      ('otherwise (* n (fact (- n 1))))))
+  (fact 5))
 
-
+(Cons (Sym "progn") (Cons
+  (Cons (Sym "define") (Cons (Cons (Sym "fact") (Sym "n")) (Cons
+    (Cons (Sym "cond") (Cons
+      (Cons (Cons (Sym "eq") (Cons (Sym "n") (Cons (Num 0) Nil))) (Cons (Num 1) Nil))
 -}
