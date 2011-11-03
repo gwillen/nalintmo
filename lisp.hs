@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 import Data.Maybe
+import System.IO.Unsafe
 
 instance Show (Sexp -> Sexp) where
   show _ = "<function>"
@@ -21,9 +22,9 @@ get_var s ((k,v):xs)
   | s == k = Just v
   | otherwise = get_var s xs
 
-mapcar_internal :: (Sexp -> Sexp) -> Sexp -> [Sexp]
-mapcar_internal _ Nil = []
-mapcar_internal f (Cons x xs) = (f x):(mapcar_internal f xs)
+mapcar_internal :: (Sexp -> Sexp) -> Sexp -> Sexp
+mapcar_internal _ Nil = Nil
+mapcar_internal f (Cons x xs) = (Cons (f x) (mapcar_internal f xs))
 mapcar_internal _ _ = error "bad mapcar_internal"
 
 do_progn :: Sexp -> Env -> (Sexp, Env)
@@ -100,23 +101,25 @@ do_times lhs rhs env = let
   (Num rhs', _) = do_eval rhs env
   in (Num (lhs' * rhs'), env)
 
-do_eval :: Sexp -> Env -> (Sexp, Env)
-do_eval (Num n) env = (Num n, env)
-do_eval (Sym s) env = (case get_var s env of Just x -> x ; Nothing -> error ("Bad var: " ++ s ++ " with env " ++ (show env)), env)
-do_eval Nil env = (Nil, env)
-do_eval (Cons (Sym "car") (Cons x Nil)) env = let (r, env') = do_eval x env in (do_car r, env')
-do_eval (Cons (Sym "cdr") (Cons x Nil)) env = let (r, env') = do_eval x env in (do_cdr r, env')
-do_eval (Cons (Sym "progn") x) env = do_progn x env
-do_eval (Cons (Sym "lambda") (Cons params body)) env = do_lambda params body env
-do_eval (Cons (Sym "define") (Cons (Sym name) val)) env = do_define name val env
-do_eval (Cons (Sym "define") (Cons (Cons (Sym name) params) body)) env = do_define_func name params body env
-do_eval (Cons (Sym "quote") (Cons arg Nil)) env = (arg, env)
-do_eval (Cons (Sym "cond") body) env = do_cond body env
-do_eval (Cons (Sym "eq") (Cons lhs (Cons rhs Nil))) env = do_eq lhs rhs env
-do_eval (Cons (Sym "+") (Cons lhs (Cons rhs Nil))) env = do_plus lhs rhs env
-do_eval (Cons (Sym "-") (Cons lhs (Cons rhs Nil))) env = do_minus lhs rhs env
-do_eval (Cons (Sym "*") (Cons lhs (Cons rhs Nil))) env = do_times lhs rhs env
-do_eval (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env) args env
+do_eval exp env = (System.IO.Unsafe.unsafePerformIO (print ((show exp) ++ " -- " ++ (show env)))) `seq` (do_eval_helper exp env)
+
+do_eval_helper :: Sexp -> Env -> (Sexp, Env)
+do_eval_helper (Num n) env = (Num n, env)
+do_eval_helper (Sym s) env = (case get_var s env of Just x -> x ; Nothing -> error ("Bad var: " ++ s ++ " with env " ++ (show env)), env)
+do_eval_helper Nil env = (Nil, env)
+do_eval_helper (Cons (Sym "car") (Cons x Nil)) env = let (r, env') = do_eval x env in (do_car r, env')
+do_eval_helper (Cons (Sym "cdr") (Cons x Nil)) env = let (r, env') = do_eval x env in (do_cdr r, env')
+do_eval_helper (Cons (Sym "progn") x) env = do_progn x env
+do_eval_helper (Cons (Sym "lambda") (Cons params body)) env = do_lambda params body env
+do_eval_helper (Cons (Sym "define") (Cons (Sym name) val)) env = do_define name val env
+do_eval_helper (Cons (Sym "define") (Cons (Cons (Sym name) params) body)) env = do_define_func name params body env
+do_eval_helper (Cons (Sym "quote") (Cons arg Nil)) env = (arg, env)
+do_eval_helper (Cons (Sym "cond") body) env = do_cond body env
+do_eval_helper (Cons (Sym "eq") (Cons lhs (Cons rhs Nil))) env = do_eq lhs rhs env
+do_eval_helper (Cons (Sym "+") (Cons lhs (Cons rhs Nil))) env = do_plus lhs rhs env
+do_eval_helper (Cons (Sym "-") (Cons lhs (Cons rhs Nil))) env = do_minus lhs rhs env
+do_eval_helper (Cons (Sym "*") (Cons lhs (Cons rhs Nil))) env = do_times lhs rhs env
+do_eval_helper (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env) (mapcar_internal (\arg -> fst $ do_eval arg env) args) env
 
 
 {- Sample program: factorial
