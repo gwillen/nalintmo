@@ -56,6 +56,15 @@ do_cdr :: Sexp -> Sexp
 do_cdr (Cons _ x) = x
 do_cdr _ = error "bad cdr"
 
+-- I'm tired. No bools tonight. Also we throw away env again. Because I said
+--  so.
+do_cond :: Sexp -> Env -> (Sexp, Env)
+do_cond Nil env = (Nil, env)
+do_cond (Cons (Cons cond (Cons result Nil)) rest) env =
+  case do_eval cond env of
+    (Nil, _) -> do_cond rest env
+    (_, _) -> do_eval result env
+
 do_eval :: Sexp -> Env -> (Sexp, Env)
 do_eval (Num n) env = (Num n, env)
 do_eval (Sym s) env = (case get_var s env of Just x -> x ; Nothing -> error "Bad var", env)
@@ -67,4 +76,12 @@ do_eval (Cons (Sym "lambda") (Cons params body)) env = do_lambda params body env
 do_eval (Cons (Sym "define") (Cons (Sym name) val)) env = do_define name val env
 do_eval (Cons (Sym "define") (Cons (Cons (Sym name) params) body)) env = do_define_func name params body env
 do_eval (Cons (Sym "quote") (Cons arg Nil)) env = (arg, env)
+do_eval (Cons (Sym "cond") body) env = do_cond body env
 do_eval (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env) args env
+
+
+{- Sample program: factorial
+
+(progn
+  (define (fact n)
+-}
