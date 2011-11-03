@@ -213,6 +213,41 @@ template <typename env, typename heap, int ctr, char name[]> struct eval<Sym<nam
   typedef typename x::r_heap r_heap; \
   static const int r_ctr = x::r_ctr
 
+template <typename cond_val, typename result, typename rest, typename env, typename heap, int ctr>
+struct do_cond_case;
+
+template <typename body, typename env, typename heap, int ctr> struct do_cond {};
+template <typename env, typename heap, int ctr>
+struct do_cond<Nil, env, heap, ctr> {
+  typedef Nil r_val;
+  typedef env r_env;
+  typedef heap r_heap;
+  static const int r_ctr = ctr;
+};
+template <typename condition, typename result, typename rest, typename env, typename heap, int ctr>
+struct do_cond<Cons<Cons<condition, Cons<result, Nil> >, rest>, env, heap, ctr> {
+  typedef eval<condition, env, heap, ctr> cond_eval;
+  typedef typename cond_eval::r_val cond_val;
+  typedef typename cond_eval::r_env newenv;
+  typedef typename cond_eval::r_heap newheap;
+  static const int newctr = cond_eval::r_ctr;
+  typedef do_cond_case<cond_val, result, rest, newenv, newheap, newctr> final_result;
+  RETURN(final_result);
+};
+
+template <typename cond_val, typename result, typename rest, typename env, typename heap, int ctr>
+struct do_cond_case {
+  // Because of the specialization below, this will fire if cond_val is
+  // non-nil.
+  typedef eval<result, env, heap, ctr> final_result;
+  RETURN(final_result);
+};
+template <typename result, typename rest, typename env, typename heap, int ctr>
+struct do_cond_case<Nil, result, rest, env, heap, ctr> {
+  typedef do_cond<rest, env, heap, ctr> final_result;
+  RETURN(final_result);
+};
+
 // No eval case for Gensym, because we only use them as heap keys; they should
 // never appear in code.
 // No eval case for Func either. In real Lisp they evaluate to themselves, but
@@ -244,6 +279,11 @@ struct eval<Cons<Sym<quote>, Cons<exp, Nil> >, env, heap, ctr> {
   typedef env r_env;
   typedef heap r_heap;
   static const int r_ctr = ctr;
+};
+template <typename body, typename env, typename heap, int ctr>
+struct eval<Cons<Sym<cond>, body>, env, heap, ctr> {
+  typedef do_cond<body, env, heap, ctr> result;
+  RETURN(result);
 };
 
 /*
