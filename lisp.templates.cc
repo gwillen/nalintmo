@@ -57,7 +57,7 @@ template <int ctr> struct gensym {
   static const int r_ctr = ctr + 1;
 };
 
-template <typename k, typename heap> struct lookup {};
+template <typename k, typename pairlist> struct lookup {};
 template <typename k, typename v, typename rest>
 struct lookup<k, Cons<Cons<k, v>, rest> > {
   typedef v r_val;
@@ -65,6 +65,11 @@ struct lookup<k, Cons<Cons<k, v>, rest> > {
 template <typename k1, typename k2, typename v, typename rest>
 struct lookup<k1, Cons<Cons<k2, v>, rest> > {
   typedef struct lookup<k1, rest>::r_val r_val;
+};
+
+template <typename k, typename env, typename heap> struct env_lookup {
+  typedef typename lookup<k, env>::r_val k2;
+  typedef typename lookup<k2, heap>::r_val r_val;
 };
 
 template <typename exp, typename env, typename heap, int ctr> struct eval {};
@@ -86,14 +91,12 @@ template <typename env, typename heap, int ctr, int i> struct eval<Int<i>, env, 
   typedef heap r_heap;
   static const int r_ctr = ctr;
 };
-/*
-template <typename env, typename heap, int ctr> struct eval<Int<i>, env, heap, ctr> {
-  typedef Int<i> r_val;
+template <typename env, typename heap, int ctr, char name[]> struct eval<Sym<name>, env, heap, ctr> {
+  typedef typename env_lookup<Sym<name>, env, heap>::r_val r_val;
   typedef env r_env;
   typedef heap r_heap;
   static const int r_ctr = ctr;
 };
-*/
 
 /*
 Structure of the heap: map gensymm'ed keys lead to values
