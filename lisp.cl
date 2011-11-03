@@ -55,18 +55,14 @@
 (defun def-var (var val env)
   (cons (cons var val) env))
 
-(defun set-var-global (var val) (set-var-env var val global-env))
-
 (defun set-var (var val env)
   (cond
     ((null env) nil)
     ((eq (caar env) var) (setf (cdar env) val))
-    (t (set-var-env var val (cdr env)))))
-
-(defun get-var-global (var) (get-var-env var global-env))
+    (t (set-var var val (cdr env)))))
 
 (defun get-var (var env)
   (cond
     ((null env) nil)
     ((eq (caar env) var) (cdar env))
-    (t (get-var-env var (cdr env)))))
+    (t (get-var var (cdr env)))))

@@ -27,9 +27,12 @@ bind_params :: Sexp -> Sexp -> Env -> Env
 bind_params Nil Nil env = env
 bind_params (Cons (Sym p) ps) (Cons a as) env = (p, a) : (bind_params ps as env) 
 
+-- There's something wrong with my environment handling here, but iono if it
+--  matters in the absence of setq. Fst discards the returned environment from
+--  the function body, so defines in function bodies will have no effect.
 do_lambda :: Sexp -> Sexp -> Env -> (Sexp, Env)
-do_lambda params body env = (Func (\args -> do_eval (Cons (Sym "progn") body)
-                                                    (bind_params params args env)),
+do_lambda params body env = (Func (\args -> fst $do_eval (Cons (Sym "progn") body)
+                                                         (bind_params params args env)),
                              env) 
 
 do_define :: Sexp -> Sexp
