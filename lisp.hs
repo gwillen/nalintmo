@@ -75,6 +75,24 @@ do_eq lhs rhs env = let
     False -> (Nil, env)
     True -> ((Sym "true"), env)
     
+do_plus :: Sexp -> Sexp -> Env -> (Sexp, Env)
+do_plus lhs rhs env = let
+  (Num lhs', _) = do_eval lhs env
+  (Num rhs', _) = do_eval rhs env
+  in (Num (lhs' + rhs'), env)
+
+do_minus :: Sexp -> Sexp -> Env -> (Sexp, Env)
+do_minus lhs rhs env = let
+  (Num lhs', _) = do_eval lhs env
+  (Num rhs', _) = do_eval rhs env
+  in (Num (lhs' - rhs'), env)
+
+do_times :: Sexp -> Sexp -> Env -> (Sexp, Env)
+do_times lhs rhs env = let
+  (Num lhs', _) = do_eval lhs env
+  (Num rhs', _) = do_eval rhs env
+  in (Num (lhs' * rhs'), env)
+
 do_eval :: Sexp -> Env -> (Sexp, Env)
 do_eval (Num n) env = (Num n, env)
 do_eval (Sym s) env = (case get_var s env of Just x -> x ; Nothing -> error "Bad var", env)
@@ -87,7 +105,10 @@ do_eval (Cons (Sym "define") (Cons (Sym name) val)) env = do_define name val env
 do_eval (Cons (Sym "define") (Cons (Cons (Sym name) params) body)) env = do_define_func name params body env
 do_eval (Cons (Sym "quote") (Cons arg Nil)) env = (arg, env)
 do_eval (Cons (Sym "cond") body) env = do_cond body env
-do_eval (Cons (Sym "eq") (Cons lhs (Cons rhs Nil))) env = do_eq rhs lhs env
+do_eval (Cons (Sym "eq") (Cons lhs (Cons rhs Nil))) env = do_eq lhs rhs env
+do_eval (Cons (Sym "+") (Cons lhs (Cons rhs Nil))) env = do_plus lhs rhs env
+do_eval (Cons (Sym "-") (Cons lhs (Cons rhs Nil))) env = do_minus lhs rhs env
+do_eval (Cons (Sym "*") (Cons lhs (Cons rhs Nil))) env = do_times lhs rhs env
 do_eval (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env) args env
 
 
@@ -96,5 +117,8 @@ do_eval (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env)
 (progn
   (define (fact n)
     (cond
-      ((eq n 0)
+      ((eq n 0) 1)
+      ('otherwise (* n (fact (- n 1)))))))
+
+
 -}
