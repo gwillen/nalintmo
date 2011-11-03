@@ -128,8 +128,17 @@ do_eval (Cons (Sym f) args) env = do_apply (Data.Maybe.fromJust $ get_var f env)
       ('otherwise (* n (fact (- n 1))))))
   (fact 5))
 
-(Cons (Sym "progn") (Cons
-  (Cons (Sym "define") (Cons (Cons (Sym "fact") (Sym "n")) (Cons
-    (Cons (Sym "cond") (Cons
-      (Cons (Cons (Sym "eq") (Cons (Sym "n") (Cons (Num 0) Nil))) (Cons (Num 1) Nil))
+-}
+
+test_source = (
+  L [S "progn",
+    L [S "define", L [S "fact", S "n"],
+      L [(S "cond"),
+        L [L [S "eq", S "n", N 0], N 1],
+        L [S "otherwise", L [S "*", S "n", L [S "fact", L [S "-", S "n", N 1]]]]]],
+    L [S "fact", N 5]])
+
+{-
+*Main> do_eval (input_sexp test_source) []
+(*** Exception: Bad var
 -}
