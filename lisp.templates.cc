@@ -128,7 +128,7 @@ template <typename x> struct eq_internal<x, x> {
 };
 
 template <int ctr> struct gensym {
-  static const int r_val = ctr;
+  typedef Gensym<ctr> r_val;
   static const int r_ctr = ctr + 1;
 };
 
@@ -338,6 +338,60 @@ struct bind_params<Cons<k, params>, Cons<v, args>, env, heap, ctr> {
   RETURN(result);
 };
 
+#define PASS_ENV_THROUGH \
+  typedef env r_env; \
+  typedef heap r_heap; \
+  static const int r_ctr = ctr
+
+template <typename arg, typename env, typename heap, int ctr> struct do_prim_car {};
+template <typename x, typename y, typename env, typename heap, int ctr>
+struct do_prim_car<Cons<x, y>, env, heap, ctr> {
+  typedef x r_val;
+  PASS_ENV_THROUGH;
+};
+template <typename arg, typename env, typename heap, int ctr> struct do_prim_cdr {};
+template <typename x, typename y, typename env, typename heap, int ctr>
+struct do_prim_cdr<Cons<x, y>, env, heap, ctr> {
+  typedef y r_val;
+  PASS_ENV_THROUGH;
+};
+template <typename arg, typename env, typename heap, int ctr> struct do_prim_eq{};
+template <typename x, typename y, typename env, typename heap, int ctr>
+struct do_prim_eq<Cons<x, Cons<y, Nil> >, env, heap, ctr> {
+  typedef Nil r_val;
+  PASS_ENV_THROUGH;
+};
+template <typename x, typename env, typename heap, int ctr>
+struct do_prim_eq<Cons<x, Cons<x, Nil> >, env, heap, ctr> {
+  typedef True r_val;
+  PASS_ENV_THROUGH;
+};
+template <typename arg, typename env, typename heap, int ctr> struct do_prim_plus {};
+template <int x, int y, typename env, typename heap, int ctr>
+struct do_prim_plus<Cons<Int<x>, Cons<Int<y>, Nil> >, env, heap, ctr> {
+  typedef Int<x+y> r_val;
+  PASS_ENV_THROUGH;
+};
+template <typename arg, typename env, typename heap, int ctr> struct do_prim_minus {};
+template <int x, int y, typename env, typename heap, int ctr>
+struct do_prim_minus<Cons<Int<x>, Cons<Int<y>, Nil> >, env, heap, ctr> {
+  typedef Int<x-y> r_val;
+  PASS_ENV_THROUGH;
+};
+template <typename arg, typename env, typename heap, int ctr> struct do_prim_times {};
+template <int x, int y, typename env, typename heap, int ctr>
+struct do_prim_times<Cons<Int<x>, Cons<Int<y>, Nil> >, env, heap, ctr> {
+  typedef Int<x*y> r_val;
+  PASS_ENV_THROUGH;
+};
+template <typename arg, typename env, typename heap, int ctr> struct do_prim_cons {};
+template <typename x, typename y, typename env, typename heap, int ctr>
+struct do_prim_cons<Cons<x, Cons<y, Nil> >, env, heap, ctr> {
+  typedef Cons<x, y> r_val;
+  PASS_ENV_THROUGH;
+};
+
+
 template <typename f, typename args, typename env, typename heap, int ctr>
 struct do_apply_actual {};
 template <typename stored_env, typename params, typename body, typename args, typename env, typename heap, int ctr>
@@ -350,6 +404,19 @@ struct do_apply_actual <Func <stored_env, params, body>, args, env, heap, ctr> {
   typedef eval<body_progn, newenv, newheap, newctr> result;
   RETURN(result);
 };
+#define DO_APPLY_PRIM(x) \
+template <typename args, typename env, typename heap, int ctr> \
+struct do_apply_actual <Prim<x>, args, env, heap, ctr> { \
+  typedef do_prim_##x<args, env, heap, ctr> result; \
+  RETURN(result); \
+}
+DO_APPLY_PRIM(car);
+DO_APPLY_PRIM(cdr);
+DO_APPLY_PRIM(eq);
+DO_APPLY_PRIM(cons);
+DO_APPLY_PRIM(plus);
+DO_APPLY_PRIM(minus);
+DO_APPLY_PRIM(times);
 
 template <typename fun, typename args, typename env, typename heap, int ctr>
 struct do_apply_internal {
@@ -438,6 +505,18 @@ struct eval<Cons<fun, args>, env, heap, ctr> {
 };
 
 
+#define EXTEND(env_pkg, new_pkg, k, v) \
+typedef extend_env<k, v, env_pkg::r_env, env_pkg::r_heap, env_pkg::r_ctr> new_pkg
+
+typedef extend_env<Sym<car>, Prim<car>, Nil, Nil, 0> e1;
+EXTEND(e1, e2, Sym<cdr>, Prim<cdr>);
+EXTEND(e2, e3, Sym<eq>, Prim<eq>);
+EXTEND(e3, e4, Sym<plus>, Prim<plus>);
+EXTEND(e4, e5, Sym<minus>, Prim<minus>);
+EXTEND(e5, e6, Sym<times>, Prim<times>);
+EXTEND(e6, e7, Sym<cons>, Prim<cons>);
+
+typedef e7 initial_env;
 
 /*
 Structure of the heap: map gensymm'ed keys lead to values
@@ -446,8 +525,6 @@ is necessary! Otherwise you can't properly do update of state shared between
 two closures. (If a closure side-effects its own environment, the other one
 won't see. But if it side-effects the global heap, everybody sees.)
 */
-
-
 
 int main() {
   eval<Nil, Nil, Nil, 0>::r_val a;
