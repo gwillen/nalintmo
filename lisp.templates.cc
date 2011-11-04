@@ -7,7 +7,17 @@
 // user-defined kinds, in the sense of statically checking the suitability of
 // template argument types, but they were dropped from the standard. :-(
 struct True { static void print() { printf("True"); } };
-struct Nil { static void print() { printf("Nil"); } };
+struct Nil {
+  static void print() {
+    printf("Nil");
+  }
+  static void pretty() {
+    printf("()");
+  }
+  static void prettylist() {
+    printf(")");
+  }
+};
 template <typename car, typename cdr> struct Cons {
   static void print() {
     printf("Cons(");
@@ -16,15 +26,74 @@ template <typename car, typename cdr> struct Cons {
     cdr::print();
     printf(")");
   }
+  static void pretty() {
+    printf("(");
+    car::pretty();
+    cdr::prettylist();
+  }
+  static void prettylist() {
+    printf(" ");
+    car::print();
+    cdr::prettylist();
+  }
 };
 template <int n> struct Int {
-  static void print() { printf("Int(%d)", n); } };
+  static void print() { printf("Int(%d)", n); }
+  static void pretty() { printf("%d", n); }
+  static void prettylist() {
+    printf(" . ");
+    pretty();
+    printf(")");
+  }
+};
 template <char name[80]> struct Sym {
-  static void print() { printf("Sym(%s)", name); } };
+  static void print() { printf("Sym(%s)", name); }
+  static void pretty() { printf("%s", name); }
+  static void prettylist() {
+    printf(" . ");
+    pretty();
+    printf(")");
+  }
+};
 template <int ctr> struct Gensym {
-  static void print() { printf("Gensym(%d)", ctr); } };
+  static void print() { printf("Gensym(%d)", ctr); }
+  static void pretty() { printf("<generated symbol %d>", ctr); }
+  static void prettylist() {
+    printf(" . ");
+    pretty();
+    printf(")");
+  }
+};
 template <typename env, typename params, typename body> struct Func {
-  static void print() { printf("<function>"); } };
+  static void print() {
+    printf("Func(");
+    params::print();
+    printf(" -> ");
+    body::print();
+    printf(")");
+  }
+  static void pretty() {
+    printf("<function ");
+    params::pretty();
+    printf(" -> ");
+    body::pretty();
+    printf(">");
+  }
+  static void prettylist() {
+    printf(" . ");
+    pretty();
+    printf(")");
+  }
+};
+template <char name[80]> struct Prim {
+  static void print() { printf("<primitive function %s>"); }
+  static void pretty() { print(); }
+  static void prettylist() {
+    printf(" . ");
+    pretty();
+    printf(")");
+  }
+};
 
 // Predefined symbols
 // Note that Sym("true") != True, and Sym("nil") != Nil. *shrug*.
@@ -368,6 +437,8 @@ struct eval<Cons<fun, args>, env, heap, ctr> {
   RETURN(result);
 };
 
+
+
 /*
 Structure of the heap: map gensymm'ed keys lead to values
 Structure of the environment: map symbols to gensymmed keys. This indirection
@@ -375,6 +446,7 @@ is necessary! Otherwise you can't properly do update of state shared between
 two closures. (If a closure side-effects its own environment, the other one
 won't see. But if it side-effects the global heap, everybody sees.)
 */
+
 
 
 int main() {
