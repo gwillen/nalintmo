@@ -97,7 +97,13 @@ template <char name[80]> struct Prim {
 
 // Predefined symbols
 // Note that Sym("true") != True, and Sym("nil") != Nil. *shrug*.
-#define SYM(x) char x[] = #x
+#define SYM(x, y) const char x[] = #y
+SYM(plus, +);
+SYM(minus, -);
+SYM(times, *);
+#undef SYM(x, y)
+
+#define SYM(x) const char * const x = #x
 
 // Builtins
 SYM(progn);
@@ -111,12 +117,7 @@ SYM(car);
 SYM(cdr);
 SYM(eq);
 SYM(cons);
-#undef SYM(x)
-#define SYM(x, y) char x[] = #y
-SYM(plus, +);
-SYM(minus, -);
-SYM(times, *);
-#undef SYM(x, y)
+// We leave SYM defined for later use by code.
 
 // Helpers
 
@@ -528,7 +529,9 @@ EXTEND(e4, e5, Sym<minus>, Prim<minus>);
 EXTEND(e5, e6, Sym<times>, Prim<times>);
 EXTEND(e6, e7, Sym<cons>, Prim<cons>);
 
-typedef e7 initial_env;
+typedef e7::r_env init_env;
+typedef e7::r_heap init_heap;
+static const int init_ctr = e7::r_ctr;
 
 /*
 Structure of the heap: map gensymm'ed keys lead to values
@@ -538,12 +541,43 @@ two closures. (If a closure side-effects its own environment, the other one
 won't see. But if it side-effects the global heap, everybody sees.)
 */
 
+/* Sample program: factorial
+
+(progn
+  (define (fact n)
+    (cond
+      ((eq n 0) 1)
+      (True (* n (fact (- n 1))))))
+  (fact 5))
+
+*/
+
+SYM(fact);
+SYM(n);
+
 int main() {
-  eval<Nil, Nil, Nil, 0>::r_val a;
+  typedef
+  list3<Sym<progn>,
+        list3<Sym<define>, list2<Sym<fact>, Sym<n>>::r_val,
+              list3<Sym<cond>,
+                    list2<list3<Sym<eq>, Sym<n>, Int<0> >::r_val, Int<1> >::r_val,
+                    list2<True, 
+                          list3<Sym<times>, Sym<n>,
+                                list2<Sym<fact>,
+                                      list3<Sym<minus>, 
+                                            Sym<n>,
+                                            Int<1> >::r_val>::r_val>::r_val>::r_val>::r_val>::r_val,
+        list2<Sym<fact>, Int<5> >::r_val>::r_val
+  program;
+
+  typedef eval<program, init_env, init_heap, init_ctr> result;
+
+  result::r_val::pretty();
+
+  //eval<Nil, Nil, Nil, 0>::r_val a;
   //a.print();
   //eq_internal<Cons<True, True>, Cons<True, True> >::r_val::print();
-  Cons<True, True>::print();
-
+  //Cons<True, True>::print();
   //lookup<Gensym<1>, Cons<Cons<Gensym<2>, True>, Cons<Cons<Gensym<3>, True>, Nil> > >::r_val y;
   //y.print();
 
