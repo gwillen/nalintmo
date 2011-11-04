@@ -46,7 +46,7 @@ template <int n> struct Int {
     printf(")");
   }
 };
-template <char name[80]> struct Sym {
+template <const char * name> struct Sym {
   static void print() { printf("Sym(%s)", name); }
   static void pretty() { printf("%s", name); }
   static void prettylist() {
@@ -85,7 +85,7 @@ template <typename env, typename params, typename body> struct Func {
     printf(")");
   }
 };
-template <char name[80]> struct Prim {
+template <const char * name> struct Prim {
   static void print() { printf("<primitive function %s>"); }
   static void pretty() { print(); }
   static void prettylist() {
@@ -97,13 +97,13 @@ template <char name[80]> struct Prim {
 
 // Predefined symbols
 // Note that Sym("true") != True, and Sym("nil") != Nil. *shrug*.
-#define SYM(x, y) const char x[] = #y
+#define SYM(x, y) char x[] = #y
 SYM(plus, +);
 SYM(minus, -);
 SYM(times, *);
 #undef SYM(x, y)
 
-#define SYM(x) const char * const x = #x
+#define SYM(x) char x[] = #x
 
 // Builtins
 SYM(progn);
@@ -552,20 +552,20 @@ won't see. But if it side-effects the global heap, everybody sees.)
 
 */
 
+SYM(num);
 SYM(fact);
-SYM(n);
 
 int main() {
   typedef
   list3<Sym<progn>,
-        list3<Sym<define>, list2<Sym<fact>, Sym<n>>::r_val,
+        list3<Sym<define>, list2<Sym<fact>, Sym<num> >::r_val,
               list3<Sym<cond>,
-                    list2<list3<Sym<eq>, Sym<n>, Int<0> >::r_val, Int<1> >::r_val,
+                    list2<list3<Sym<eq>, Sym<num>, Int<0> >::r_val, Int<1> >::r_val,
                     list2<True, 
-                          list3<Sym<times>, Sym<n>,
+                          list3<Sym<times>, Sym<num>,
                                 list2<Sym<fact>,
                                       list3<Sym<minus>, 
-                                            Sym<n>,
+                                            Sym<num>,
                                             Int<1> >::r_val>::r_val>::r_val>::r_val>::r_val>::r_val,
         list2<Sym<fact>, Int<5> >::r_val>::r_val
   program;
