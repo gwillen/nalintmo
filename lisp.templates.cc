@@ -504,6 +504,18 @@ struct eval<Cons<fun, args>, env, heap, ctr> {
   RETURN(result);
 };
 
+template<typename x1> struct list1 {
+  typedef Cons<x1, Nil> r_val;
+};
+template<typename x1, typename x2> struct list2 {
+  typedef Cons<x1, Cons<x2, Nil> > r_val;
+};
+template<typename x1, typename x2, typename x3> struct list3 {
+  typedef Cons<x1, Cons<x2, Cons<x3, Nil> > > r_val;
+};
+template<typename x1, typename x2, typename x3, typename x4> struct list4 {
+  typedef Cons<x1, Cons<x2, Cons<x3, Cons<x4, Nil> > > > r_val;
+};
 
 #define EXTEND(env_pkg, new_pkg, k, v) \
 typedef extend_env<k, v, env_pkg::r_env, env_pkg::r_heap, env_pkg::r_ctr> new_pkg
