@@ -155,8 +155,8 @@ template <typename k, typename env, typename heap> struct env_lookup {
 template <typename name, typename value, typename env, typename heap, int ctr>
 struct extend_env {
   typedef gensym<ctr> gensym_result;
-  typedef bind<name, typename gensym_result::r_val, env> r_env;
-  typedef bind<typename gensym_result::r_val, value, heap> r_heap;
+  typedef typename bind<name, typename gensym_result::r_val, env>::r_val r_env;
+  typedef typename bind<typename gensym_result::r_val, value, heap>::r_val r_heap;
   static const int r_ctr = gensym_result::r_ctr;
 };
 
@@ -336,7 +336,9 @@ struct bind_params<Cons<k, params>, Cons<v, args>, env, heap, ctr> {
   typedef typename extended::r_heap newheap;
   static const int newctr = extended::r_ctr;
   typedef bind_params<params, args, newenv, newheap, newctr> result;
-  RETURN(result);
+  typedef typename result::r_env r_env;
+  typedef typename result::r_heap r_heap;
+  static const int r_ctr = result::r_ctr;
 };
 
 #define PASS_ENV_THROUGH \
@@ -454,7 +456,7 @@ template <typename env, typename heap, int ctr, int i> struct eval<Int<i>, env, 
   typedef heap r_heap;
   static const int r_ctr = ctr;
 };
-template <typename env, typename heap, int ctr, char name[]> struct eval<Sym<name>, env, heap, ctr> {
+template <typename env, typename heap, int ctr, const char * name> struct eval<Sym<name>, env, heap, ctr> {
   typedef typename env_lookup<Sym<name>, env, heap>::r_val r_val;
   typedef env r_env;
   typedef heap r_heap;
@@ -477,12 +479,12 @@ struct eval<Cons<Sym<lambda>, Cons<params, body> >, env, heap, ctr> {
   typedef do_lambda<params, body, env, heap, ctr> result;
   RETURN(result);
 };
-template <char name[], typename exp, typename env, typename heap, int ctr>
+template <const char * name, typename exp, typename env, typename heap, int ctr>
 struct eval<Cons<Sym<define>, Cons<Sym<name>, Cons<exp, Nil> > >, env, heap, ctr> {
   typedef do_define<Sym<name>, exp, env, heap, ctr> result;
   RETURN(result);
 };
-template <char name[], typename params, typename body, typename env, typename heap, int ctr>
+template <const char * name, typename params, typename body, typename env, typename heap, int ctr>
 struct eval<Cons<Sym<define>, Cons<Cons<Sym<name>, params>, body> >, env, heap, ctr> {
   typedef do_define_func<Sym<name>, params, body, env, heap, ctr> result;
   RETURN(result);
