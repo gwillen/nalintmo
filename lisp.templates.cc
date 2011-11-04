@@ -6,7 +6,19 @@
 // kinds. "Concepts" from C++0x would have added something akin to
 // user-defined kinds, in the sense of statically checking the suitability of
 // template argument types, but they were dropped from the standard. :-(
-struct True { static void print() { printf("True"); } };
+struct True {
+  static void print() {
+    printf("True");
+  }
+  static void pretty() {
+    print();
+  }
+  static void prettylist() {
+    printf(" . ");
+    pretty();
+    printf(")");
+  }
+};
 struct Nil {
   static void print() {
     printf("Nil");
@@ -33,7 +45,7 @@ template <typename car, typename cdr> struct Cons {
   }
   static void prettylist() {
     printf(" ");
-    car::print();
+    car::pretty();
     cdr::prettylist();
   }
 };
@@ -86,7 +98,7 @@ template <typename env, typename params, typename body> struct Func {
   }
 };
 template <const char * name> struct Prim {
-  static void print() { printf("<primitive function %s>"); }
+  static void print() { printf("<primitive function %s>", name); }
   static void pretty() { print(); }
   static void prettylist() {
     printf(" . ");
@@ -574,14 +586,17 @@ int main() {
 
   typedef eval<program, init_env, init_heap, init_ctr> result;
 
+  printf("CODE: ");
+  program::pretty();
+  printf("\n");
+  printf("ENV:  ");
+  init_env::pretty();
+  printf("\n");
+  printf("HEAP: ");
+  init_heap::pretty();
+  printf("\n");
+  printf("CTR:  %d\n", init_ctr);
+  printf("==> ");
   result::r_val::pretty();
-
-  //eval<Nil, Nil, Nil, 0>::r_val a;
-  //a.print();
-  //eq_internal<Cons<True, True>, Cons<True, True> >::r_val::print();
-  //Cons<True, True>::print();
-  //lookup<Gensym<1>, Cons<Cons<Gensym<2>, True>, Cons<Cons<Gensym<3>, True>, Nil> > >::r_val y;
-  //y.print();
-
   printf("\n");
 }
