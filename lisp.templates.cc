@@ -29,13 +29,17 @@ template <typename env, typename params, typename body> struct Func {
 // Predefined symbols
 // Note that Sym("true") != True, and Sym("nil") != Nil. *shrug*.
 #define SYM(x) char x[] = #x
-SYM(car);
-SYM(cdr);
+
+// Builtins
 SYM(progn);
 SYM(lambda);
 SYM(define);
 SYM(quote);
 SYM(cond);
+
+// Primitive functions
+SYM(car);
+SYM(cdr);
 SYM(eq);
 SYM(cons);
 #undef SYM(x)
@@ -177,41 +181,18 @@ struct do_define_func {
   typedef typename mutate<name, r_val, r_env, newheap2>::r_heap r_heap;
 };
 
-template <typename exp, typename env, typename heap, int ctr> struct eval {};
-template <typename env, typename heap, int ctr> struct eval<True, env, heap, ctr> {
-  typedef True r_val;
-  typedef env r_env;
-  typedef heap r_heap;
-  static const int r_ctr = ctr;
-};
-template <typename env, typename heap, int ctr> struct eval<Nil, env, heap, ctr> {
-  typedef Nil r_val;
-  typedef env r_env;
-  typedef heap r_heap;
-  static const int r_ctr = ctr;
-};
-template <typename env, typename heap, int ctr, int i> struct eval<Int<i>, env, heap, ctr> {
-  typedef Int<i> r_val;
-  typedef env r_env;
-  typedef heap r_heap;
-  static const int r_ctr = ctr;
-};
-template <typename env, typename heap, int ctr, char name[]> struct eval<Sym<name>, env, heap, ctr> {
-  typedef typename env_lookup<Sym<name>, env, heap>::r_val r_val;
-  typedef env r_env;
-  typedef heap r_heap;
-  static const int r_ctr = ctr;
-};
-
-// Helper macro for the special form cases below. Normally it would be bad form
-// not to wrap this in do{}while(0) or ({}), except these are typedefs so none
-// of that would be valid here, and you can't really use this wrong anyway
-// since you can't put it in a block.
+// Helper macro for the special form cases of eval, and the cond helpers.
+// Normally it would be bad form not to wrap this in do{}while(0) or ({}),
+// except these are typedefs so none of that would be valid here, and you can't
+// really use this wrong anyway since you can't put it in a block.
 #define RETURN(x) \
   typedef typename x::r_val r_val; \
   typedef typename x::r_env r_env; \
   typedef typename x::r_heap r_heap; \
   static const int r_ctr = x::r_ctr
+
+// Somehow do_cond snick into the middle of eval. I dunno man. I just work
+// here.
 
 template <typename cond_val, typename result, typename rest, typename env, typename heap, int ctr>
 struct do_cond_case;
@@ -247,6 +228,102 @@ struct do_cond_case<Nil, result, rest, env, heap, ctr> {
   typedef do_cond<rest, env, heap, ctr> final_result;
   RETURN(final_result);
 };
+
+template <typename list, typename env, typename heap, int ctr> struct map_eval {};
+template <typename env, typename heap, int ctr>
+struct map_eval <Nil, env, heap, ctr> {
+  typedef Nil r_val;
+  typedef env r_env;
+  typedef heap r_heap;
+  static const int r_ctr = ctr;
+};
+template <typename x, typename xs, typename env, typename heap, int ctr>
+struct map_eval <Cons <x, xs>, env, heap, ctr> {
+  typedef eval<x, env, heap, ctr> result;
+  typedef typename result::r_val result_val;
+  typedef typename result::r_env newenv;
+  typedef typename result::r_heap newheap;
+  static const int newctr = result::r_ctr;
+  typedef map_eval<xs, newenv, newheap, newctr> result2;
+  typedef Cons <result_val, typename result2::r_val> r_val;
+  typedef typename result2::r_env r_env;
+  typedef typename result2::r_heap r_heap;
+  static const int r_ctr = result2::r_ctr;
+};
+
+template <typename params, typename args, typename env, typename heap, int ctr>
+struct bind_params {};
+template <typename env, typename heap, int ctr>
+struct bind_params<Nil, Nil, env, heap, ctr> {
+  typedef env r_env;
+  typedef heap r_heap;
+  static const int r_ctr = ctr;
+};
+template <typename k, typename params, typename v, typename args, typename env, typename heap, int ctr>
+struct bind_params<Cons<k, params>, Cons<v, args>, env, heap, ctr> {
+  typedef extend_env<k, v, env, heap, ctr> extended;
+  typedef typename extended::r_env newenv;
+  typedef typename extended::r_heap newheap;
+  static const int newctr = extended::r_ctr;
+  typedef bind_params<params, args, newenv, newheap, newctr> result;
+  RETURN(result);
+};
+
+template <typename f, typename args, typename env, typename heap, int ctr>
+struct do_apply_actual {};
+template <typename stored_env, typename params, typename body, typename args, typename env, typename heap, int ctr>
+struct do_apply_actual <Func <stored_env, params, body>, args, env, heap, ctr> {
+  typedef bind_params<params, args, stored_env, heap, ctr> params_result;
+  typedef typename params_result::r_env newenv;
+  typedef typename params_result::r_heap newheap;
+  static const int newctr = params_result::r_ctr;
+  typedef Cons<Sym<progn>, body> body_progn;
+  typedef eval<body_progn, newenv, newheap, newctr> result;
+  RETURN(result);
+};
+
+template <typename fun, typename args, typename env, typename heap, int ctr>
+struct do_apply_internal {
+  typedef eval<fun, env, heap, ctr> fun_result;
+  typedef typename fun_result::r_val f;
+  typedef typename fun_result::r_env newenv;
+  typedef typename fun_result::r_heap newheap;
+  static const int newctr = fun_result::r_ctr;
+  typedef map_eval<args, newenv, newheap, newctr> args_result;
+  typedef typename args_result::r_val args_actual;
+  typedef typename args_result::r_env newenv2;
+  typedef typename args_result::r_heap newheap2;
+  static const int newctr2 = args_result::r_ctr;
+  typedef do_apply_actual<f, args_actual, newenv2, newheap2, newctr2> final_result;
+  RETURN(final_result);
+};
+
+template <typename exp, typename env, typename heap, int ctr> struct eval {};
+template <typename env, typename heap, int ctr> struct eval<True, env, heap, ctr> {
+  typedef True r_val;
+  typedef env r_env;
+  typedef heap r_heap;
+  static const int r_ctr = ctr;
+};
+template <typename env, typename heap, int ctr> struct eval<Nil, env, heap, ctr> {
+  typedef Nil r_val;
+  typedef env r_env;
+  typedef heap r_heap;
+  static const int r_ctr = ctr;
+};
+template <typename env, typename heap, int ctr, int i> struct eval<Int<i>, env, heap, ctr> {
+  typedef Int<i> r_val;
+  typedef env r_env;
+  typedef heap r_heap;
+  static const int r_ctr = ctr;
+};
+template <typename env, typename heap, int ctr, char name[]> struct eval<Sym<name>, env, heap, ctr> {
+  typedef typename env_lookup<Sym<name>, env, heap>::r_val r_val;
+  typedef env r_env;
+  typedef heap r_heap;
+  static const int r_ctr = ctr;
+};
+
 
 // No eval case for Gensym, because we only use them as heap keys; they should
 // never appear in code.
@@ -285,6 +362,11 @@ struct eval<Cons<Sym<cond>, body>, env, heap, ctr> {
   typedef do_cond<body, env, heap, ctr> result;
   RETURN(result);
 };
+template <typename fun, typename args, typename env, typename heap, int ctr>
+struct eval<Cons<fun, args>, env, heap, ctr> {
+  typedef do_apply_internal<fun, args, env, heap, ctr> result;
+  RETURN(result);
+};
 
 /*
 Structure of the heap: map gensymm'ed keys lead to values
@@ -294,8 +376,6 @@ two closures. (If a closure side-effects its own environment, the other one
 won't see. But if it side-effects the global heap, everybody sees.)
 */
 
-
-char hello[] = "hello";
 
 int main() {
   eval<Nil, Nil, Nil, 0>::r_val a;
@@ -307,6 +387,4 @@ int main() {
   //y.print();
 
   printf("\n");
-
-  //Sym<hello> x;
 }
