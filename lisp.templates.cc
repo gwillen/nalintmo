@@ -129,6 +129,7 @@ SYM(car);
 SYM(cdr);
 SYM(eq);
 SYM(cons);
+SYM(set);
 // We leave SYM defined for later use by code.
 
 // Helpers
@@ -405,6 +406,15 @@ struct do_prim_cons<Cons<x, Cons<y, Nil> >, env, heap, ctr> {
   typedef Cons<x, y> r_val;
   PASS_ENV_THROUGH;
 };
+template <typename arg, typename env, typename heap, int ctr> struct do_prim_set {};
+template <typename name, typename value, typename env, typename heap, int ctr>
+struct do_prim_set<Cons<name, Cons<value, Nil> >, env, heap, ctr> {
+  typedef mutate<name, value, env, heap> result;
+  typedef value r_val;
+  typedef env r_env;
+  typedef typename result::r_heap r_heap;
+  static const int r_ctr = ctr;
+};
 
 
 template <typename f, typename args, typename env, typename heap, int ctr>
@@ -429,6 +439,7 @@ DO_APPLY_PRIM(car);
 DO_APPLY_PRIM(cdr);
 DO_APPLY_PRIM(eq);
 DO_APPLY_PRIM(cons);
+DO_APPLY_PRIM(set);
 DO_APPLY_PRIM(plus);
 DO_APPLY_PRIM(minus);
 DO_APPLY_PRIM(times);
@@ -542,10 +553,11 @@ EXTEND(e3, e4, Sym<plus>, Prim<plus>);
 EXTEND(e4, e5, Sym<minus>, Prim<minus>);
 EXTEND(e5, e6, Sym<times>, Prim<times>);
 EXTEND(e6, e7, Sym<cons>, Prim<cons>);
+EXTEND(e7, e8, Sym<set>, Prim<set>);
 
-typedef e7::r_env init_env;
-typedef e7::r_heap init_heap;
-static const int init_ctr = e7::r_ctr;
+typedef e8::r_env init_env;
+typedef e8::r_heap init_heap;
+static const int init_ctr = e8::r_ctr;
 
 /*
 Structure of the heap: map gensymm'ed keys lead to values
@@ -568,6 +580,11 @@ won't see. But if it side-effects the global heap, everybody sees.)
 
 SYM(num);
 SYM(fact);
+
+/* XXX A note on the primitive "set": It is _not_ setq; it expects the first
+ * argument quoted. This is because I'm lazy, and setq has to be a macro or
+ * special form, whereas set can be a primitive function.
+ */
 
 int main() {
   typedef
