@@ -1,3 +1,9 @@
+exception Unimplemented;
+exception Already_done;
+exception Cant_happen;
+exception Not_found;
+exception Bad_key;
+
 datatype sexp_i = NIL_I
   | TRUE_I
   (* No dotted lists. Because fuck you, that's why. *)
@@ -9,29 +15,37 @@ datatype sexp_i = NIL_I
   | PRIM_I of (context -> sdata list -> (context * sdata))
 and sdata = EXP of sexp_i
   | VAL of sexp_i
-withtype map = (sexp_i * sexp_i) list
+and key = SYM_K of string | GENSYM_K of int
+withtype map = (key * sexp_i) list
 (* (globalenv * localenv) * heap * ctr *) 
 and context = ((map * map) * map * int)
 
-exception Unimplemented;
-exception Already_done;
-exception Cant_happen;
-exception Not_found;
+fun make_key (SYM_I s) = SYM_K s
+  | make_key (GENSYM_I n) = GENSYM_K n
+  | make_key _ = raise Bad_key;
+
+fun sexp_eq NIL_I NIL_I = true
+  | sexp_eq TRUE_I TRUE_I = true
+  | sexp_eq (NUM_I m) (NUM_I n) = m = n
+  | sexp_eq (SYM_I r) (SYM_I s) = r = s
+  | sexp_eq (GENSYM_I m) (GENSYM_I n) = m = n
+  | sexp_eq (LIST_I ((VAL x) :: rest1)) (LIST_I ((VAL y) :: rest2)) =
+      (sexp_eq x y) andalso (sexp_eq (LIST_I rest1) (LIST_I rest2)) 
 
 (* map_lookup : map -> sexp_i -> sexp_i option *)
 fun map_lookup [] k = NONE
   | map_lookup ((k1, v1) :: rest) k =
-      if k = k1 then SOME v1 
+      if (make_key k) = k1 then SOME v1 
       else map_lookup rest k
 
 (* map_set : map -> sexp_i -> sexp_i -> map *)
 fun map_set [] k v = []
   | map_set ((k1, v1) :: rest) k v =
-      if k = k1 then ((k, v) :: rest)
+      if (make_key k) = k1 then ((k1, v) :: rest)
       else ((k1, v1) :: (map_set rest k v))
 
 (* map_bind : map -> sexp_i -> sexp_i -> map *)
-fun map_bind m k v = (k, v) :: m
+fun map_bind m k v = ((make_key k), v) :: m
 
 (* env_set : ctx -> sexp_i -> sexp_i -> ctx *)
 fun env_set ((globalenv, localenv), heap, ctr) k v =
@@ -68,9 +82,9 @@ fun gensym ctr = (GENSYM_I ctr, ctr + 1);
 (* bind_env : map -> map -> int -> sexp_i -> sexp_i -> (map * map * int)  *)
 fun bind_env env heap ctr name value =
   let
-    (heapk, ctr') = gensym ctr;
-    env' = map_bind env name heapk;
-    heap' = map_bind heap heapk value;
+    val (heapk, ctr') = gensym ctr;
+    val env' = map_bind env name heapk;
+    val heap' = map_bind heap heapk value;
   in
     (env', heap', ctr')
   end
@@ -93,7 +107,7 @@ fun bind_or_set_env env heap ctr name value =
 
 (* do_lambda : ctx -> sdata list -> sexp_i -> val sdata *)
 fun do_lambda ((globalenv, localenv), heap, ctr) params body =
-  VAL (FUN_I (localenv, params, EXP (LIST_I ( (EXP (SYM_I "progn")) :: body ))));
+  VAL (FUNC_I (localenv, params, LIST_I ( (EXP (SYM_I "progn")) :: body )));
 
 (* do_define : ctx -> sexp_i -> sexp_i -> ctx *)
 fun do_define ((globalenv, localenv), heap, ctr) name value =
@@ -117,20 +131,21 @@ fun bind_params ctx [] [] = ctx
 fun do_apply ctx (PRIM_I f) args = f ctx args
   | do_apply ((globalenv, localenv), heap, ctr) (FUNC_I (closureenv, params, body)) args = 
       let val ctx' = bind_params ((globalenv, closureenv), heap, ctr) params args
-      in (ctx', body) end
+      in (ctx', EXP body) end
 
+(* smallstep_arglist : ctx -> sdata list -> (bool * ctx * sdata list) *)
 fun smallstep_arglist ctx [] = (true, ctx, [])
   | smallstep_arglist ctx ((EXP x) :: xs) =
-      let (ctx', result) = smallstep ctx (EXP x) in
-        (ctx', (result :: xs))
+      let val (ctx', result) = smallstep ctx (EXP x) in
+        (false, ctx', (result :: xs))
       end
   | smallstep_arglist ctx ((VAL x) :: xs) =
-      let (done, ctx', result) = smallstep_arglist ctx xs in
+      let val (done, ctx', result) = smallstep_arglist ctx xs in
         (done, ctx', ((VAL x) :: result))
       end
 
 (* smallstep : context -> exp sdata -> ctx * sdata *)
-fun smallstep ctx (VAL x) = raise Already_done
+and smallstep ctx (VAL x) = raise Already_done
   | smallstep ctx (EXP (FUNC_I f)) = raise Cant_happen
   | smallstep ctx (EXP (NUM_I x)) = (ctx, (VAL (NUM_I x)))
   | smallstep ctx (EXP (SYM_I s)) = (ctx, env_lookup ctx (SYM_I s))
@@ -139,7 +154,7 @@ fun smallstep ctx (VAL x) = raise Already_done
   | smallstep ctx (EXP (LIST_I [EXP (SYM_I "progn")])) = (ctx, VAL NIL_I)
   | smallstep ctx (EXP (LIST_I [EXP (SYM_I "progn"), EXP x])) = (ctx, EXP x)
   | smallstep ctx (EXP (LIST_I ((EXP (SYM_I "progn")) :: EXP x :: xs))) =
-      let (ctx', result) = (smallstep ctx (EXP x)) in
+      let val (ctx', result) = (smallstep ctx (EXP x)) in
         (ctx', (EXP (LIST_I ((EXP (SYM_I "progn")) :: result :: xs))))
       end
   | smallstep ctx (EXP (LIST_I ((EXP (SYM_I "progn")) :: VAL x :: xs))) = 
@@ -149,20 +164,20 @@ fun smallstep ctx (VAL x) = raise Already_done
       (ctx, do_lambda ctx params body)
 
   | smallstep ctx (EXP (LIST_I [EXP (SYM_I "define"), EXP (SYM_I name), EXP value])) = 
-      let (ctx', result) = (smallstep ctx (EXP value)) in
+      let val (ctx', result) = (smallstep ctx (EXP value)) in
         (ctx', (EXP (LIST_I [EXP (SYM_I "define"), EXP (SYM_I name), result])))
       end
   | smallstep ctx (EXP (LIST_I [EXP (SYM_I "define"), EXP (SYM_I name), VAL value])) = 
       (do_define ctx (SYM_I name) value, VAL value)
 
-  | smallstep (ctx as (globalenv, env, heap, ctr)) (EXP (LIST_I ( (EXP (SYM_I "define")) :: (EXP (LIST_I ( (SYM_I name) :: params))) :: body))) = 
+  | smallstep ctx (EXP (LIST_I ( (EXP (SYM_I "define")) :: (EXP (LIST_I ( (EXP (SYM_I name)) :: params))) :: body))) = 
       (do_define_func ctx (SYM_I name) params body, VAL NIL_I)
 
   | smallstep ctx (EXP (LIST_I [EXP (SYM_I "quote"), EXP x])) = (ctx, VAL x)
   
   | smallstep ctx (EXP (LIST_I [EXP (SYM_I "cond")])) = (ctx, VAL NIL_I)
   | smallstep ctx (EXP (LIST_I ( (EXP (SYM_I "cond")) :: (EXP (LIST_I [EXP c, EXP r])) :: rest))) =
-      let (ctx', result) = (smallstep ctx (EXP c)) in
+      let val (ctx', result) = (smallstep ctx (EXP c)) in
         (ctx', (EXP (LIST_I ( (EXP (SYM_I "cond")) :: (EXP (LIST_I [result, EXP r])) :: rest))))
       end
   | smallstep ctx (EXP (LIST_I ( (EXP (SYM_I "cond")) :: (EXP (LIST_I [VAL NIL_I, EXP r])) :: rest))) =
@@ -177,7 +192,7 @@ fun smallstep ctx (VAL x) = raise Already_done
                           EXP v])))
 
   | smallstep ctx (EXP (LIST_I ( (EXP f) :: args ))) =
-      let (ctx', result) = (smallstep ctx (EXP f)) in
+      let val (ctx', result) = (smallstep ctx (EXP f)) in
         (ctx', (EXP (LIST_I ( result :: args ))))
       end
   | smallstep ctx (EXP (LIST_I ( (VAL f) :: args ))) =
@@ -188,8 +203,8 @@ fun smallstep ctx (VAL x) = raise Already_done
 (* prim_xxx : ctx -> sdata list -> (ctx * sdata) *)
 fun prim_car ctx [VAL (LIST_I (x::xs))] = (ctx, x)
 fun prim_cdr ctx [VAL (LIST_I (x::xs))] = (ctx, VAL (LIST_I xs))
-fun prim_eq ctx [VAL a, VAL b] = (ctx, if a = b then VAL TRUE_I else VAL NIL_I)
-fun prim_cons ctx [VAL a, VAL (LIST_I b)] = (ctx, VAL (LIST_I (a :: b)))
+fun prim_eq ctx [VAL a, VAL b] = (ctx, if (sexp_eq a b) then VAL TRUE_I else VAL NIL_I)
+fun prim_cons ctx [VAL a, VAL (LIST_I b)] = (ctx, VAL (LIST_I ((VAL a) :: b)))
 fun prim_set ctx [VAL a, VAL b] = (env_set ctx a b, VAL b)
 
 val init_ctx =
@@ -209,5 +224,5 @@ val init_ctx =
 (* eval : ctx -> exp sdata -> val sdata *)
 fun eval ctx x = 
   case smallstep ctx x of
-      VAL v => VAL v
-    | EXP e => eval ctx (EXP e)
+      (_, VAL v) => VAL v
+    | (_, EXP e) => eval ctx (EXP e)
