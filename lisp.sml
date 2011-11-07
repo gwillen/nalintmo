@@ -39,7 +39,7 @@ fun map_lookup [] k = NONE
       else map_lookup rest k
 
 (* map_set : map -> sexp_i -> sexp_i -> map *)
-fun map_set [] k v = []
+fun map_set [] (k:sexp_i) (v:sexp_i) = []
   | map_set ((k1, v1) :: rest) k v =
       if (make_key k) = k1 then ((k1, v) :: rest)
       else ((k1, v1) :: (map_set rest k v))
@@ -119,7 +119,9 @@ fun do_define ((globalenv, localenv), heap, ctr) name value =
 
 (* do_define_func : ctx -> sexp_i -> sexp_i -> ctx *)
 (* No backpatching required due to dynamic global scope! *)
-fun do_define_func ctx name params body = do_define ctx name (do_lambda ctx params body)
+fun do_define_func ctx name params body = let
+  val VAL f = do_lambda ctx params body
+  in do_define ctx name f end
 
 (* bind_params : ctx -> (exp sdata) list -> (val sdata) list -> ctx *)
 fun bind_params ctx [] [] = ctx
