@@ -20,6 +20,20 @@ withtype map = (key * sexp_i) list
 (* (globalenv * localenv) * heap * ctr *) 
 and context = ((map * map) * map * int)
 
+datatype input_sexp = NIL
+  | TRUE
+  | LIST of input_sexp list
+  | NUM of int
+  | SYM of string
+
+fun to_sdata NIL = EXP NIL_I
+  | to_sdata TRUE = EXP TRUE_I
+  | to_sdata (NUM n) = EXP (NUM_I n)
+  | to_sdata (SYM s) = EXP (SYM_I s)
+  | to_sdata (LIST (x::xs)) =
+      let val (EXP (LIST_I rest)) = to_sdata (LIST xs)
+      in EXP (LIST_I ((to_sdata x) :: rest)) end
+
 fun make_key (SYM_I s) = SYM_K s
   | make_key (GENSYM_I n) = GENSYM_K n
   | make_key _ = raise Bad_key;
@@ -220,7 +234,7 @@ val init_ctx =
     val ctx = defprim ctx "set" prim_set
     val (globalenv, heap, ctr) = ctx
   in 
-    ((globalenv, []), heap, ctr)
+    ((globalenv, ([]:map)), heap, ctr)
   end
 
 (* eval : ctx -> exp sdata -> val sdata *)
@@ -228,3 +242,23 @@ fun eval ctx x =
   case smallstep ctx x of
       (_, VAL v) => VAL v
     | (_, EXP e) => eval ctx (EXP e)
+
+(* Sample program: factorial
+
+(progn
+  (define (fact n)
+    (cond
+      ((eq n 0) 1)
+      ((quote otherwise) ( * n (fact (- n 1))))))
+  (fact 5))
+
+*)
+
+val sample = to_sdata (
+  LIST [SYM "progn",
+    LIST [SYM "define", LIST [SYM "fact", SYM "n"],
+      LIST [SYM "cond",
+        LIST [LIST [SYM "eq", SYM "n", NUM 0], NUM 1],
+        LIST [TRUE, LIST [SYM "*", SYM "n", LIST [SYM "fact", LIST [SYM "-", SYM "n", NUM 1]]]]]],
+    LIST [SYM "fact", NUM 5]]);
+     
