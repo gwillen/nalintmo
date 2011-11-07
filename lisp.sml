@@ -4,8 +4,8 @@ exception Cant_happen;
 exception Not_found;
 exception Bad_key;
 
-datatype sexp_i = NIL_I
-  | TRUE_I
+datatype sexp_i =
+    TRUE_I
   (* No dotted lists. Because fuck you, that's why. *)
   | LIST_I of sdata list
   | NUM_I of int
@@ -20,16 +20,16 @@ withtype map = (key * sexp_i) list
 (* (globalenv * localenv) * heap * ctr *) 
 and context = ((map * map) * map * int)
 
-datatype input_sexp = NIL
-  | TRUE
+datatype input_sexp = 
+    TRUE
   | LIST of input_sexp list
   | NUM of int
   | SYM of string
 
-fun to_sdata NIL = EXP NIL_I
-  | to_sdata TRUE = EXP TRUE_I
+fun to_sdata TRUE = EXP TRUE_I
   | to_sdata (NUM n) = EXP (NUM_I n)
   | to_sdata (SYM s) = EXP (SYM_I s)
+  | to_sdata (LIST []) = EXP (LIST_I [])
   | to_sdata (LIST (x::xs)) =
       let val (EXP (LIST_I rest)) = to_sdata (LIST xs)
       in EXP (LIST_I ((to_sdata x) :: rest)) end
@@ -38,13 +38,14 @@ fun make_key (SYM_I s) = SYM_K s
   | make_key (GENSYM_I n) = GENSYM_K n
   | make_key _ = raise Bad_key;
 
-fun sexp_eq NIL_I NIL_I = true
-  | sexp_eq TRUE_I TRUE_I = true
+fun sexp_eq TRUE_I TRUE_I = true
   | sexp_eq (NUM_I m) (NUM_I n) = m = n
   | sexp_eq (SYM_I r) (SYM_I s) = r = s
   | sexp_eq (GENSYM_I m) (GENSYM_I n) = m = n
+  | sexp_eq (LIST_I []) (LIST_I []) = true
   | sexp_eq (LIST_I ((VAL x) :: rest1)) (LIST_I ((VAL y) :: rest2)) =
       (sexp_eq x y) andalso (sexp_eq (LIST_I rest1) (LIST_I rest2)) 
+  | sexp_eq _ _ = false
 
 (* map_lookup : map -> sexp_i -> sexp_i option *)
 fun map_lookup [] k = NONE
@@ -165,9 +166,9 @@ and smallstep ctx (VAL x) = raise Already_done
   | smallstep ctx (EXP (FUNC_I f)) = raise Cant_happen
   | smallstep ctx (EXP (NUM_I x)) = (ctx, (VAL (NUM_I x)))
   | smallstep ctx (EXP (SYM_I s)) = (ctx, env_lookup ctx (SYM_I s))
-  | smallstep ctx (EXP NIL_I) = (ctx, VAL NIL_I)
+  | smallstep ctx (EXP (LIST_I [])) = (ctx, VAL (LIST_I []))
 
-  | smallstep ctx (EXP (LIST_I [EXP (SYM_I "progn")])) = (ctx, VAL NIL_I)
+  | smallstep ctx (EXP (LIST_I [EXP (SYM_I "progn")])) = (ctx, VAL (LIST_I []))
   | smallstep ctx (EXP (LIST_I [EXP (SYM_I "progn"), EXP x])) = (ctx, EXP x)
   | smallstep ctx (EXP (LIST_I ((EXP (SYM_I "progn")) :: EXP x :: xs))) =
       let val (ctx', result) = (smallstep ctx (EXP x)) in
@@ -187,16 +188,16 @@ and smallstep ctx (VAL x) = raise Already_done
       (do_define ctx (SYM_I name) value, VAL value)
 
   | smallstep ctx (EXP (LIST_I ( (EXP (SYM_I "define")) :: (EXP (LIST_I ( (EXP (SYM_I name)) :: params))) :: body))) = 
-      (do_define_func ctx (SYM_I name) params body, VAL NIL_I)
+      (do_define_func ctx (SYM_I name) params body, VAL (LIST_I []))
 
   | smallstep ctx (EXP (LIST_I [EXP (SYM_I "quote"), EXP x])) = (ctx, VAL x)
   
-  | smallstep ctx (EXP (LIST_I [EXP (SYM_I "cond")])) = (ctx, VAL NIL_I)
+  | smallstep ctx (EXP (LIST_I [EXP (SYM_I "cond")])) = (ctx, VAL (LIST_I []))
   | smallstep ctx (EXP (LIST_I ( (EXP (SYM_I "cond")) :: (EXP (LIST_I [EXP c, EXP r])) :: rest))) =
       let val (ctx', result) = (smallstep ctx (EXP c)) in
         (ctx', (EXP (LIST_I ( (EXP (SYM_I "cond")) :: (EXP (LIST_I [result, EXP r])) :: rest))))
       end
-  | smallstep ctx (EXP (LIST_I ( (EXP (SYM_I "cond")) :: (EXP (LIST_I [VAL NIL_I, EXP r])) :: rest))) =
+  | smallstep ctx (EXP (LIST_I ( (EXP (SYM_I "cond")) :: (EXP (LIST_I [VAL (LIST_I []), EXP r])) :: rest))) =
       (ctx, (EXP (LIST_I ( (EXP (SYM_I "cond")) :: rest ))))
   | smallstep ctx (EXP (LIST_I ( (EXP (SYM_I "cond")) :: (EXP (LIST_I [VAL _, EXP r])) :: rest))) =
       (ctx, EXP r)
@@ -219,7 +220,7 @@ and smallstep ctx (VAL x) = raise Already_done
 (* prim_xxx : ctx -> sdata list -> (ctx * sdata) *)
 fun prim_car ctx [VAL (LIST_I (x::xs))] = (ctx, x)
 fun prim_cdr ctx [VAL (LIST_I (x::xs))] = (ctx, VAL (LIST_I xs))
-fun prim_eq ctx [VAL a, VAL b] = (ctx, if (sexp_eq a b) then VAL TRUE_I else VAL NIL_I)
+fun prim_eq ctx [VAL a, VAL b] = (ctx, if (sexp_eq a b) then VAL TRUE_I else VAL (LIST_I []))
 fun prim_cons ctx [VAL a, VAL (LIST_I b)] = (ctx, VAL (LIST_I ((VAL a) :: b)))
 fun prim_set ctx [VAL a, VAL b] = (env_set ctx a b, VAL b)
 
