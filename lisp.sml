@@ -191,6 +191,7 @@ fun smallstep_arglist ctx [] = (true, ctx, [])
 (* smallstep : context -> exp sdata -> ctx * sdata *)
 and smallstep ctx (VAL x) = raise Already_done
   | smallstep ctx (EXP (FUNC_I f)) = raise Cant_happen
+  | smallstep ctx (EXP TRUE_I) = (ctx, VAL TRUE_I)
   | smallstep ctx (EXP (NUM_I x)) = (ctx, (VAL (NUM_I x)))
   | smallstep ctx (EXP (SYM_I s)) = (ctx, env_lookup ctx (SYM_I s))
   | smallstep ctx (EXP (LIST_I [])) = (ctx, VAL (LIST_I []))
@@ -250,6 +251,9 @@ fun prim_cdr ctx [VAL (LIST_I (x::xs))] = (ctx, VAL (LIST_I xs))
 fun prim_eq ctx [VAL a, VAL b] = (ctx, if (sexp_eq a b) then VAL TRUE_I else VAL (LIST_I []))
 fun prim_cons ctx [VAL a, VAL (LIST_I b)] = (ctx, VAL (LIST_I ((VAL a) :: b)))
 fun prim_set ctx [VAL a, VAL b] = (env_set ctx a b, VAL b)
+fun prim_plus ctx [VAL (NUM_I a), VAL (NUM_I b)] = (ctx, VAL (NUM_I (a + b)))
+fun prim_minus ctx [VAL (NUM_I a), VAL (NUM_I b)] = (ctx, VAL (NUM_I (a - b)))
+fun prim_times ctx [VAL (NUM_I a), VAL (NUM_I b)] = (ctx, VAL (NUM_I (a * b)))
 
 val init_ctx =
   let 
@@ -260,6 +264,9 @@ val init_ctx =
     val ctx = defprim ctx "eq" prim_eq
     val ctx = defprim ctx "cons" prim_cons
     val ctx = defprim ctx "set" prim_set
+    val ctx = defprim ctx "+" prim_plus
+    val ctx = defprim ctx "-" prim_minus
+    val ctx = defprim ctx "*" prim_times
     val (globalenv, heap, ctr) = ctx
   in 
     ((globalenv, ([]:map)), heap, ctr)
@@ -268,11 +275,12 @@ val init_ctx =
 (* eval : ctx -> exp sdata -> val sdata *)
 fun eval ctx x =
   let
-    val _ = print ("EVAL: " ^ (sdata_to_string x) ^ "  --- IN: " ^ (ctx_to_string ctx) ^ "\n")
+    val _ = print ("EVAL: " ^ (sdata_to_string x) (*^ "  --- IN: " ^
+    (ctx_to_string ctx) *)^ "\n")
   in
     case smallstep ctx x of
         (_, VAL v) => VAL v
-      | (_, EXP e) => eval ctx (EXP e)
+      | (ctx, EXP e) => eval ctx (EXP e)
   end
 
 (* Sample program: factorial
