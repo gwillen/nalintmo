@@ -4,6 +4,8 @@ exception Cant_happen;
 exception Not_found;
 exception Bad_key;
 
+Control.Print.stringDepth := 9999;
+
 datatype sexp_i =
     TRUE_I
   (* No dotted lists. Because fuck you, that's why. *)
@@ -11,8 +13,8 @@ datatype sexp_i =
   | NUM_I of int
   | SYM_I of string
   | GENSYM_I of int
-  | FUNC_I of (map * sdata list * sexp_i) (* localenv * params * body; only in VAL, never in EXP *)
-  | PRIM_I of (context -> sdata list -> (context * sdata))
+  | FUNC_I of (sexp_i * map * sdata list * sexp_i) (* name *localenv * params * body; only in VAL, never in EXP *)
+  | PRIM_I of (string * (context -> sdata list -> (context * sdata)))
 and sdata = EXP of sexp_i
   | VAL of sexp_i
 and key = SYM_K of string | GENSYM_K of int
@@ -25,6 +27,31 @@ datatype input_sexp =
   | LIST of input_sexp list
   | NUM of int
   | SYM of string
+
+
+fun sdata_to_string (VAL x) = "(# " ^ (sexp_i_to_string x) ^ " #)"
+  | sdata_to_string (EXP x) = (sexp_i_to_string x)
+and sexp_i_to_string TRUE_I = "true"
+  | sexp_i_to_string (NUM_I n) = Int.toString n
+  | sexp_i_to_string (SYM_I s) = s
+  | sexp_i_to_string (GENSYM_I n) = "<gensym " ^ (Int.toString n) ^ ">"
+  | sexp_i_to_string (FUNC_I (name, _, _, _)) = "<function " ^ (sexp_i_to_string name) ^ ">"
+  | sexp_i_to_string (PRIM_I (name, _)) = "<primitive function " ^ name ^ ">"
+  | sexp_i_to_string (LIST_I l) = "(" ^ (sexp_i_list_to_string l)
+and sexp_i_list_to_string [] = ")"
+  | sexp_i_list_to_string (x::xs) = (sdata_to_string x) ^ " " ^ (sexp_i_list_to_string xs)
+
+and ctx_to_string ((globalenv, localenv), heap, ctr) = 
+    (map_to_string localenv) ^ "; " ^
+    (map_to_string globalenv) ^ "; " ^
+    (map_to_string heap) ^ "; " ^ (Int.toString ctr)
+and map_to_string [] = ""
+  | map_to_string ((k, v) :: rest) = (key_to_string k) ^ "->" ^ 
+                                     (sexp_i_to_string v) ^ ", " ^
+                                     (map_to_string rest)
+and key_to_string (SYM_K s) = s
+  | key_to_string (GENSYM_K i) = "<gensym " ^ (Int.toString i) ^ ">"
+
 
 fun to_sdata TRUE = EXP TRUE_I
   | to_sdata (NUM n) = EXP (NUM_I n)
@@ -121,8 +148,8 @@ fun bind_or_set_env env heap ctr name value =
     | NONE => bind_env env heap ctr name value
 
 (* do_lambda : ctx -> sdata list -> sexp_i -> val sdata *)
-fun do_lambda ((globalenv, localenv), heap, ctr) params body =
-  VAL (FUNC_I (localenv, params, LIST_I ( (EXP (SYM_I "progn")) :: body )));
+fun do_lambda name ((globalenv, localenv), heap, ctr) params body =
+  VAL (FUNC_I (name, localenv, params, LIST_I ( (EXP (SYM_I "progn")) :: body )));
 
 (* do_define : ctx -> sexp_i -> sexp_i -> ctx *)
 fun do_define ((globalenv, localenv), heap, ctr) name value =
@@ -135,7 +162,7 @@ fun do_define ((globalenv, localenv), heap, ctr) name value =
 (* do_define_func : ctx -> sexp_i -> sexp_i -> ctx *)
 (* No backpatching required due to dynamic global scope! *)
 fun do_define_func ctx name params body = let
-  val VAL f = do_lambda ctx params body
+  val VAL f = do_lambda name ctx params body
   in do_define ctx name f end
 
 (* bind_params : ctx -> (exp sdata) list -> (val sdata) list -> ctx *)
@@ -145,8 +172,8 @@ fun bind_params ctx [] [] = ctx
       in bind_params ((globalenv, localenv'), heap', ctr') params args end
 
 (* do_apply : ctx -> (prim | func) sexp_i -> (val sdata) list -> (ctx * sdata) *)
-fun do_apply ctx (PRIM_I f) args = f ctx args
-  | do_apply ((globalenv, localenv), heap, ctr) (FUNC_I (closureenv, params, body)) args = 
+fun do_apply ctx (PRIM_I (_, f)) args = f ctx args
+  | do_apply ((globalenv, localenv), heap, ctr) (FUNC_I (_, closureenv, params, body)) args = 
       let val ctx' = bind_params ((globalenv, closureenv), heap, ctr) params args
       in (ctx', EXP body) end
 
@@ -178,7 +205,7 @@ and smallstep ctx (VAL x) = raise Already_done
       (ctx, (EXP (LIST_I ((EXP (SYM_I "progn")) :: xs))))
 
   | smallstep ctx (EXP (LIST_I ((EXP (SYM_I "lambda")) :: (EXP (LIST_I params)) :: body))) =
-      (ctx, do_lambda ctx params body)
+      (ctx, do_lambda (SYM_I "*anonymous closure*") ctx params body)
 
   | smallstep ctx (EXP (LIST_I [EXP (SYM_I "define"), EXP (SYM_I name), EXP value])) = 
       let val (ctx', result) = (smallstep ctx (EXP value)) in
@@ -226,7 +253,7 @@ fun prim_set ctx [VAL a, VAL b] = (env_set ctx a b, VAL b)
 
 val init_ctx =
   let 
-    fun defprim (env, heap, ctr) k v = bind_env env heap ctr (SYM_I k) (PRIM_I v)
+    fun defprim (env, heap, ctr) k v = bind_env env heap ctr (SYM_I k) (PRIM_I (k, v))
     val ctx = ([], [], 0)
     val ctx = defprim ctx "car" prim_car
     val ctx = defprim ctx "cdr" prim_cdr
@@ -239,10 +266,14 @@ val init_ctx =
   end
 
 (* eval : ctx -> exp sdata -> val sdata *)
-fun eval ctx x = 
-  case smallstep ctx x of
-      (_, VAL v) => VAL v
-    | (_, EXP e) => eval ctx (EXP e)
+fun eval ctx x =
+  let
+    val _ = print ("EVAL: " ^ (sdata_to_string x) ^ "  --- IN: " ^ (ctx_to_string ctx) ^ "\n")
+  in
+    case smallstep ctx x of
+        (_, VAL v) => VAL v
+      | (_, EXP e) => eval ctx (EXP e)
+  end
 
 (* Sample program: factorial
 
