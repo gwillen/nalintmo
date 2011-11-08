@@ -1,0 +1,11 @@
+This is the repo for National Lisp Interpreter Month: a project to write a Lisp
+interpreter every day in the month of November, in a different language each
+day.
+
+As a result, it is full of code in languages I don't know, written in an
+extreme rush and with sloppy style. If you judge it, please do so in context.
+;-)
+
+You can find my blog posts about the project at
+
+http://nalintmo.livejournal.com/ 
