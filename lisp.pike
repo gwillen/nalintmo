@@ -105,7 +105,7 @@ function evalc(env c) {
 }
 
 sexp eval(env c, sexp e) {
-  write("EVAL: " + to_string(e) + "\n");
+  write("EVAL: " + to_string(e) + " in env " + to_string(c->contents) + "; " + to_string(global_env) + "\n");
   if (intp(e) || floatp(e)) return e; 
   else if (stringp(e)) return env_lookup(c, e);
   else if (equal(e, ({}) )) return e;
@@ -216,7 +216,7 @@ sexp do_minus(array arg) {
     return -arg[0];
   }
   int result = arg[0];
-  map(arg, lambda(sexp x) {
+  map(arg[1..], lambda(sexp x) {
     if (!intp(x) && !floatp(x)) die("Non-numeric given to minus: ", arg);
     result -= x;
   });
@@ -234,7 +234,8 @@ sexp do_times(array arg) {
 
 sexp do_eq(array arg) {
   if (sizeof(arg) != 2) die("Call to eq with other than two arguments: ", arg);
-  return equal(arg[0], arg[1]);
+  if (equal(arg[0], arg[1])) return "true";
+  return ({});
 }
 
 void init_prims() {
