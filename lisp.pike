@@ -13,24 +13,15 @@ class env {
     if (!zero_type(e[0][k])) return 1;
     return has_internal(e[1..], k);
   }
-
-  int has(sexp k) {
-    return has_internal(contents, k);
-  }
+  int has(sexp k) { return has_internal(contents, k); }
 
   sexp get_internal(array e, sexp k) {
     if (sizeof(e) == 0) die("Not found: ", k);
     if (!zero_type(e[0][k])) return e[0][k];
     return has_internal(e[1..], k);
   }
-
-  sexp get(sexp k) {
-    return get_internal(contents, k);
-  }
-
-  sexp `[](sexp k) {
-    return get(k);
-  }
+  sexp get(sexp k) { return get_internal(contents, k); }
+  sexp `[](sexp k) { return get(k); }
 
   void set_internal(array e, sexp k, sexp v) {
     if (sizeof(e) == 0) die("Not found: ", k);
@@ -39,14 +30,8 @@ class env {
     else
       set_internal(e[1..], k, v);
   }
-    
-  void set(sexp k, sexp v) {
-    set_internal(contents, k, v);
-  }
-
-  sexp `[]=(sexp k, sexp v) {
-    set(k, v);
-  }
+  void set(sexp k, sexp v) { set_internal(contents, k, v); }
+  sexp `[]=(sexp k, sexp v) { set(k, v); }
 
   env extend(array params, array args) {
     mapping newc = ([]);
@@ -55,13 +40,13 @@ class env {
       newc[b[0]] = b[1];
     });
     array newcontents = ({ newc }) + contents;
-    env newenv;
+    env newenv = env();
     newenv->contents = newcontents;
     return newenv;
   }
 }
 
-env global_env = env();
+mapping global_env = ([]);
 
 void die(string err, mixed e) {
   error(err + to_string(e) + "\n");
@@ -69,7 +54,7 @@ void die(string err, mixed e) {
 }
 
 string to_string(mixed x) {
-  if (stringp(x) || intp(x) || floatp(x)) return x;
+  if (stringp(x) || intp(x) || floatp(x)) return ""+x;
   if (arrayp(x)) {
     x = map(x, to_string);
     return "(" + (x * ", ") + ")";
@@ -92,7 +77,7 @@ mixed foldl(function f, mixed z, array x) {
 }
 
 sexp env_lookup(env c, sexp e) {
-  if (!zero_type(c[e]))
+  if (c->has(e))
     return c[e];
   if (!zero_type(global_env[e]))
     return global_env[e];
@@ -100,7 +85,7 @@ sexp env_lookup(env c, sexp e) {
 }
 
 void set_env(env c, sexp k, sexp v) {
-  if (!zero_type(c[k])) 
+  if (c->has(k)) 
     c[k] = v;
   else if (!zero_type(global_env[k]))
     global_env[k] = v;
@@ -134,7 +119,7 @@ sexp eval(env c, sexp e) {
       case "quote":
         if(sizeof(tail) != 1) die("Quote applied to other than one arg in exp: ", e);
         return tail[0];
-      case "lamba":
+      case "lambda":
         if(!arrayp(tail[0])) die("Lambda arglist not array in exp: ", e);
         array params = tail[0];
         array body = ({ "progn" }) + tail[1..];
@@ -155,7 +140,7 @@ sexp eval(env c, sexp e) {
           array params = tail[0][1..];
           array body = ({ "progn" }) + tail[1..];
           value = lambda (array args) {
-            env newc = c.extend(params, args);
+            env newc = c->extend(params, args);
             return eval(newc, body);
           };
         } else {
@@ -169,12 +154,78 @@ sexp eval(env c, sexp e) {
         set_env(c, tail[0], val);
         return val;
       default:
-        die("No case of eval for: ", e);
-        break;
+        function f = eval(c, head);
+        array args = map(tail, evalc(c));
+        return f(args);
     }
   } else {
     die("No case of eval for: ", e);
   }
+}
+
+sexp do_car(array arg) {
+  if (sizeof(arg) != 1) die("Car given wrong number of args: ", arg);
+  sexp x = arg[0];
+  if (!arrayp(x)) die("Car of non-cons: ", arg);
+  if (sizeof(x) == 0) die("Car of nil: ", arg);
+  return x[0];
+}
+
+sexp do_cdr(array arg) {
+  if (sizeof(arg) != 1) die("Cdr given wrong number of args: ", arg);
+  sexp x = arg[0];
+  if (!arrayp(x)) die("Cdr of non-cons: ", arg);
+  if (sizeof(x) == 0) die("Cdr of nil: ", arg);
+  return x[1..];
+}
+
+sexp do_cons(array arg) {
+  if (sizeof(arg) != 2) die("Cons given wrong number of args: ", arg);
+  sexp a = arg[0];
+  sexp b = arg[1];
+  if (!arrayp(b)) die("Second arg to cons is a non-cons: ", arg);
+  return ({ a }) + b;
+}
+
+sexp do_plus(array arg) {
+  int result = 0;
+  map(arg, lambda(sexp x) {
+    if (!intp(x) && !floatp(x)) die("Non-numeric given to plus: ", arg);
+    result += x;
+  });
+  return result;
+}
+
+sexp do_minus(array arg) {
+  if (sizeof(arg) == 0) die("Too few args to minus: ", arg);
+  if (!intp(arg[0]) && !floatp(arg[0])) die("Non-numeric given to minus: ", arg);
+  if (sizeof(arg) == 1) {
+    return -arg[0];
+  }
+  int result = arg[0];
+  map(arg, lambda(sexp x) {
+    if (!intp(x) && !floatp(x)) die("Non-numeric given to minus: ", arg);
+    result -= x;
+  });
+  return result;
+}
+
+sexp do_times(array arg) {
+  int result = 1;
+  map(arg, lambda(sexp x) {
+    if (!intp(x) && !floatp(x)) die("Non-numeric given to plus: ", arg);
+    result *= x;
+  });
+  return result;
+}
+
+void init_prims() {
+  global_env["car"] = do_car;
+  global_env["cdr"] = do_cdr;
+  global_env["cons"] = do_cons;
+  global_env["+"] = do_plus;
+  global_env["-"] = do_minus;
+  global_env["*"] = do_times;
 }
 
 void main() {
