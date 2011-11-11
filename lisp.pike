@@ -105,7 +105,8 @@ function evalc(env c) {
 }
 
 sexp eval(env c, sexp e) {
-  if (intp(e)) return e; 
+  write("EVAL: " + to_string(e) + "\n");
+  if (intp(e) || floatp(e)) return e; 
   else if (stringp(e)) return env_lookup(c, e);
   else if (equal(e, ({}) )) return e;
   else if (arrayp(e)) {
@@ -153,6 +154,8 @@ sexp eval(env c, sexp e) {
         sexp val = eval(c, tail[1]);
         set_env(c, tail[0], val);
         return val;
+      case "cond":
+        return do_cond(c, tail);
       default:
         function f = eval(c, head);
         array args = map(tail, evalc(c));
@@ -161,6 +164,16 @@ sexp eval(env c, sexp e) {
   } else {
     die("No case of eval for: ", e);
   }
+}
+
+sexp do_cond(env c, array clauses) {
+  if (sizeof(clauses) == 0) return ({});
+  sexp clause = clauses[0];
+  if (!arrayp(clause) || sizeof(clause) == 0) die("Clause of cond must be list: ", clause);
+  sexp truth = eval(c, clause[0]);
+  if (equal(truth, ({}))) return do_cond(c, clauses[1..]);
+  if (sizeof(clause) == 1) return truth;
+  return eval(c, ({ "progn" }) + clause[1..]);
 }
 
 sexp do_car(array arg) {
@@ -219,14 +232,41 @@ sexp do_times(array arg) {
   return result;
 }
 
+sexp do_eq(array arg) {
+  if (sizeof(arg) != 2) die("Call to eq with other than two arguments: ", arg);
+  return equal(arg[0], arg[1]);
+}
+
 void init_prims() {
   global_env["car"] = do_car;
   global_env["cdr"] = do_cdr;
   global_env["cons"] = do_cons;
+  global_env["eq"] = do_eq;
   global_env["+"] = do_plus;
   global_env["-"] = do_minus;
   global_env["*"] = do_times;
 }
 
 void main() {
+  init_prims();
+
+  sexp factorial =
+    ({ "progn",
+      ({ "define", ({ "fact", "n" }),
+        ({ "cond",
+          ({ ({ "eq", "n", 0 }), 1 }),
+          ({ 1, ({ "*", "n", ({ "fact", ({ "-", "n", 1 }) }) }) }) }) }),
+      ({ "fact", 5 }) });
+  write(to_string(eval(env(), factorial)) + "\n");
 }
+
+/* Sample program: factorial
+
+(progn
+  (define (fact n)
+    (cond
+      ((eq n 0) 1)
+      ((quote otherwise) ( * n (fact (- n 1))))))
+  (fact 5))
+
+*/
