@@ -9,3 +9,75 @@ extreme rush and with sloppy style. If you judge it, please do so in context.
 You can find my blog posts about the project at
 
 http://nalintmo.livejournal.com/ 
+
+--------------------------------------
+
+Supported special forms: (When we say "foo is a bar" here, we mean syntactically.)
+
+- (progn e_1 ... e_n)
+  - e_k are expressions, n >= 0
+  - Evaluates the e_k in order, returning the last.
+  - (progn) => nil.
+- (lambda (a_1 ... a_m) e_1 ... e_n)
+  - a_j are symbols, e_k are expressions, m >= 0, n >= 0
+  - Creates a closure taking m arguments
+  - When applied, binds the a_j to the supplied arguments in the local
+    environment, and evaluates
+    (progn e_1 ... e_n).
+- (define k e)
+  - k is a symbol, e is an expression
+  - Evaluates e, and sets k to the result in the global environment. (This
+    creates a binding if needed, or mutates an existing binding if present.)
+- (define (f a_1 ... a_n) e_1 ... e_n)
+  - Evalutes (define f (lambda (a_1 ... a_n) e_1 ... e_n)).
+- (quote e)
+  - e is any expression
+  - Evalutes to e (literally, without evaluating e.)
+- (cond (c_1 ... c_n))
+  - c_k are clauses: lists of length >= 1.
+  - Evaluates the first element of each c_k in turn. When it finds one that is
+    non-nil, evaluates the remaining elements of c_k as though wrapped in
+    progn.
+    - If c_k is of length 1, returns the result of evaluating the first element
+      of c_k instead.
+  - If all of the c_k evaluate to nil, or there are no c_k, returns nil.
+- (setq k e)
+  - k is a symbol, e is an expression
+  - Searches first the local, then the global environment for a binding of k,
+    and mutates that binding to have the value resulting from evaluating e.
+  - If no binding is found, signals an error.
+
+
+Supported primitive functions: (When we say "foo is a bar" here, we mean after
+evaulation.)
+
+- (car c)
+  - c is a list
+  - Returns the first element of c.
+- (cdr c)
+  - c is a list
+  - Returns the list of all but the first element of c.
+- (eq a b)
+  - a and b are any values
+  - Returns nil if a != b, and any other value otherwise.
+  - Not guaranteed to consider objects the same unless they are identical; i.e.
+    not required to perform a deep comparison (but free to do so).
+  - Not guaranteed to consider any two functions the same, ever, even if they
+    are identical.
+- (cons a b)
+  - a is any value; b is a list
+  - Returns a list whose first element is a, and remaining elements are the
+    elements of b.
+- (set k v)
+  - Description exactly the same as the setq special form; but note that since
+    it is a function, the first argument is evaluated to a symbol rather than
+    being a literal symbol.
+- (+ e_1 ... e_n)
+  - e_k are numbers
+  - Returns the sum of the e_k, or zero if n = 0.
+- (- e_0 ... e_n)
+  - e_k are numbers; note that e_0 is required.
+  - Returns e_0 minus the sum of e_k for k >= 1, or -e_0 if n = 0.
+- (* e_1 ... e_n)
+  - e_k are numbers
+  - Returns the product of the e_k, or one if n = 0.
