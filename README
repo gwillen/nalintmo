@@ -12,6 +12,13 @@ http://nalintmo.livejournal.com/
 
 --------------------------------------
 
+Datatypes:
+
+- Number (at least integer)
+- Symbol
+- List (dotted lists are not necessarily supported)
+- Closure (primitive or user-defined function)
+
 Supported special forms: (When we say "foo is a bar" here, we mean syntactically.)
 
 - (progn e_1 ... e_n)
