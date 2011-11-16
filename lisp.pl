@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 
+use strict;
+use warnings;
+
 # We will implement our various exp constructors as follows:
 # - Num: scalar ref blessed as Num
 # - Sym: scalar ref blessed as Sym
@@ -28,6 +31,12 @@ sub to_string($) {
     return "(" .
            join(" ", (map { to_string($_) } @$e)) .
            ")";
+  }
+  if (ref $e eq "HASH") {
+    return "{" .
+           join(", ",
+                map { to_string($_) . "->" . to_string($e->{$_}) } keys %$e) .
+           "}";
   }
   die("Bad sexp: " . $e);  # Can't use fail here, recursion
 }
@@ -126,8 +135,9 @@ sub do_cond($$) {
   die("Unimplemented");
 }
 
-sub eval($$) {
+sub do_eval($$) {
   my ($ctx, $e) = @_;
+  print "Evaluating " . (to_string $e) . " in ctx " . (to_string $ctx) . "; " .  (to_string $global_env) . "\n";
 
   if (ref $e eq "Num") { return $e; }
   if (ref $e eq "Sym") { return env_lookup($ctx, $e); }
@@ -137,7 +147,7 @@ sub eval($$) {
     my $hd = shift @tl;
     if ($hd eq "progn") {
       if (scalar @tl == 0) { return []; }
-      my @results = map { eval($ctx, $_); } @tl;
+      my @results = map { do_eval($ctx, $_); } @tl;
       return $results[-1];
     }
     if ($hd eq "quote") {
@@ -151,7 +161,7 @@ sub eval($$) {
       $body[0] = Sym("progn");
       return sub(@) {
         $newctx = extend_ctx($ctx, \@params, \@_);
-        return eval($newctx, $body);
+        return do_eval($newctx, $body);
       };
     }
     if ($hd eq "define") {
@@ -159,7 +169,7 @@ sub eval($$) {
       if (ref $tl[0] eq "Sym") {
         scalar @tl == 2 or fail("Define of symbol with wrong number of args in exp: ", $e);
         $name = $tl[0];
-        $value = eval($ctx, $tl[1]);
+        $value = do_eval($ctx, $tl[1]);
       } elsif (ref $tl[0] eq "ARRAY") {
         scalar @{$tl[0]} != 0 or fail("Define of nil: ", $e);
         $name = $tl[0][0];
@@ -169,7 +179,7 @@ sub eval($$) {
         $body[0] = Sym("progn");
         $value = sub(@) {
           $newctx = extend_ctx($ctx, \@params, \@_);
-          return eval($newctx, $body);
+          return do_eval($newctx, $body);
         };
       } else { fail("Bad define: ", $e); }
       global_env{$name} = $value;
@@ -177,7 +187,7 @@ sub eval($$) {
     }
     if ($hd eq "setq") {
       if (scalar @tl != 2) { fail("Setq applied to wrong number of args in exp: ", $e); }
-      my $val = eval($ctx, $tail[1]);
+      my $val = do_eval($ctx, $tail[1]);
       ctx_mutate($ctx, $tail[0], $val);
       return $val;
     }
@@ -185,8 +195,8 @@ sub eval($$) {
       return do_cond($ctx, \@tail);
     }
     # Function application
-    my $f = eval($ctx, $hd);
-    my @args = map { eval($ctx, $_) } @tail;
+    my $f = do_eval($ctx, $hd);
+    my @args = map { do_eval($ctx, $_) } @tail;
     return $f->(@args);
   }
   fail("No case in eval for: ", $e);
@@ -276,6 +286,6 @@ $fact_test =
       [Num 1, [Sym "*", Sym "n", [Sym "fact", [Sym "-", Sym "n", Num 1]]]]]],
   [Sym "fact", Num 5]];
 
-print to_string(eval([], $fact_test)) . "\n";
+print to_string(do_eval([], $fact_test)) . "\n";
 
 exit 0;
