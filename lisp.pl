@@ -12,15 +12,15 @@ use warnings;
 
 sub Num($) {
   my ($n) = @_;
-  return bless \$n, Num;
+  return bless \$n, "Num";
 }
 
 sub Sym($) {
   my ($s) = @_;
-  return bless \$s, Sym;
+  return bless \$s, "Sym";
 }
 
-our %global_env = {};
+our %global_env = ();
 
 sub to_string($) {
   my ($e) = @_;
@@ -51,7 +51,7 @@ sub fail($$) {
 sub env_has($$) {
   my ($ctx, $key) = @_;
   if (ref $key ne "Sym") { fail("Bad key: ", $key); }
-  $k = $$key;
+  my $k = $$key;
 
   if (scalar @$ctx == 0) { return 0; }
   if (exists $ctx->[0]{$k}) { return 1; }
@@ -63,7 +63,7 @@ sub env_has($$) {
 sub env_get($$) {
   my ($ctx, $key) = @_;
   if (ref $key ne "Sym") { fail("Bad key: ", $key); }
-  $k = $$key;
+  my $k = $$key;
 
   if (scalar @$ctx == 0) { fail("Not found in environment: ", $key); }
   if (exists $ctx->[0]{$k}) { return $ctx->[0]{$k}; }
@@ -75,7 +75,7 @@ sub env_get($$) {
 sub env_set($$$) {
   my ($ctx, $key, $value) = @_;
   if (ref $key ne "Sym") { fail("Bad key: ", $key); }
-  $k = $$key;
+  my $k = $$key;
 
   if (scalar @$ctx == 0) { fail("Not found in environment: ", $key); }
   if (exists $ctx->[0]{$k}) { $ctx->[0]{$k} = $value; return; }
@@ -124,20 +124,20 @@ sub do_cond($$) {
   if (ref $clause ne "ARRAY" || scalar @$clause == 0) {
     fail("Clause of cond must be list: ", $clause);
   }
-  my $truth = eval($ctx, $clause->[0]);
+  my $truth = do_eval($ctx, $clause->[0]);
   if (ref $truth eq "ARRAY" && scalar @$truth == 0) {
     return do_cond($ctx, \@rest);
   }
   if (scalar @$clause == 1) { return $truth; }
   my @results = @$clause;
   $results[0] = Sym("progn");
-  return eval($ctx, \@results);
+  return do_eval($ctx, \@results);
   die("Unimplemented");
 }
 
 sub do_eval($$) {
   my ($ctx, $e) = @_;
-  print "Evaluating " . (to_string $e) . " in ctx " . (to_string $ctx) . "; " .  (to_string $global_env) . "\n";
+  print "Evaluating " . (to_string $e) . " in ctx " . (to_string $ctx) . "; " .  (to_string \%global_env) . "\n";
 
   if (ref $e eq "Num") { return $e; }
   if (ref $e eq "Sym") { return env_lookup($ctx, $e); }
@@ -160,8 +160,8 @@ sub do_eval($$) {
       my @body = @tl;
       $body[0] = Sym("progn");
       return sub(@) {
-        $newctx = extend_ctx($ctx, \@params, \@_);
-        return do_eval($newctx, $body);
+        my $newctx = extend_ctx($ctx, \@params, \@_);
+        return do_eval($newctx, \@body);
       };
     }
     if ($hd eq "define") {
@@ -178,25 +178,25 @@ sub do_eval($$) {
         my @body = @tl;
         $body[0] = Sym("progn");
         $value = sub(@) {
-          $newctx = extend_ctx($ctx, \@params, \@_);
-          return do_eval($newctx, $body);
+          my $newctx = extend_ctx($ctx, \@params, \@_);
+          return do_eval($newctx, \@body);
         };
       } else { fail("Bad define: ", $e); }
       global_env{$name} = $value;
-      return value;
+      return $value;
     }
     if ($hd eq "setq") {
       if (scalar @tl != 2) { fail("Setq applied to wrong number of args in exp: ", $e); }
-      my $val = do_eval($ctx, $tail[1]);
-      ctx_mutate($ctx, $tail[0], $val);
+      my $val = do_eval($ctx, $tl[1]);
+      ctx_mutate($ctx, $tl[0], $val);
       return $val;
     }
     if ($hd eq "cond") {
-      return do_cond($ctx, \@tail);
+      return do_cond($ctx, \@tl);
     }
     # Function application
     my $f = do_eval($ctx, $hd);
-    my @args = map { do_eval($ctx, $_) } @tail;
+    my @args = map { do_eval($ctx, $_) } @tl;
     return $f->(@args);
   }
   fail("No case in eval for: ", $e);
@@ -227,14 +227,14 @@ sub do_cons(@) {
 sub do_eq(@) {
   scalar @_ == 2 or fail("Eq applied to wrong number of args: ", \@_);
   if (ref $_[0] eq "Num" && ref $_[1] eq "Num") {
-    return ${$_[0]} == ${$_[1]} or [];
+    return ${$_[0]} == ${$_[1]} || [];
   }
   if (ref $_[0] eq "Sym" && ref $_[1] eq "Sym") {
-    return ${$_[0]} eq ${$_[1]} or [];
+    return ${$_[0]} eq ${$_[1]} || [];
   }
   if (ref $_[0] eq "ARRAY" && ref $_[1] eq "ARRAY") {
     return (scalar @{$_[0]} == 0 &&
-            scalar @{$_[1]} == 0) or [];
+            scalar @{$_[1]} == 0) || [];
   }
   return []; # No deep comparison.
 }
@@ -278,7 +278,7 @@ $global_env{"+"} = \&do_plus;
 $global_env{"-"} = \&do_minus;
 $global_env{"*"} = \&do_times;
 
-$fact_test =
+my $fact_test =
 [Sym "progn",
   [Sym "define", [Sym "fact", Sym "n"],
     [Sym "cond",
