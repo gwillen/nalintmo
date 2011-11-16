@@ -9,12 +9,12 @@
 
 sub Num($) {
   my ($n) = @_;
-  return bless $n, Num;
+  return bless \$n, Num;
 }
 
 sub Sym($) {
   my ($s) = @_;
-  return bless $s, Sym;
+  return bless \$s, Sym;
 }
 
 our %global_env = {};
@@ -267,5 +267,15 @@ $global_env{"eq"} = \&do_eq;
 $global_env{"+"} = \&do_plus;
 $global_env{"-"} = \&do_minus;
 $global_env{"*"} = \&do_times;
+
+$fact_test =
+[Sym "progn",
+  [Sym "define", [Sym "fact", Sym "n"],
+    [Sym "cond",
+      [[Sym "eq", Sym "n", Num 0], Num 1],
+      [Num 1, [Sym "*", Sym "n", [Sym "fact", [Sym "-", Sym "n", Num 1]]]]]],
+  [Sym "fact", Num 5]];
+
+print to_string(eval([], $fact_test)) . "\n";
 
 exit 0;
