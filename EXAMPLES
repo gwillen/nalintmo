@@ -1,0 +1,8 @@
+Sample/test: Factorial function (should evaluate to 120)
+
+(progn
+  (define (fact n)
+    (cond
+      ((eq n 0) 1)
+      ((quote otherwise) ( * n (fact (- n 1))))))
+  (fact 5))
