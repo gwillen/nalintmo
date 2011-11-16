@@ -24,6 +24,7 @@ our %global_env = ();
 
 sub to_string($) {
   my ($e) = @_;
+  if (ref $e eq "") { return $e; }
   if (ref $e eq "Sym") { return $$e; }
   if (ref $e eq "Num") { return "".$$e; }
   if (ref $e eq "CODE") { return "<function>"; }
@@ -41,9 +42,20 @@ sub to_string($) {
   die("Bad sexp: " . $e);  # Can't use fail here, recursion
 }
 
+sub traceback() {
+  my $i = 0;
+  my @info;
+  while(@info = caller $i) {
+    print "[$info[0]] $info[1]:$info[2] $info[3]\n";
+    $i++;
+  }
+}
+
 sub fail($$) {
   my ($msg, $e) = @_;
   $msg .= to_string($e);
+  print $msg . "\n";
+  traceback();
   die($msg . "; died");
 }
 
@@ -87,7 +99,7 @@ sub env_set($$$) {
 sub ctx_lookup($$) {
   my ($ctx, $key) = @_;
   if (env_has($ctx, $key)) { return env_get($ctx, $key); }
-  if (exists $global_env{$key}) { return $global_env{$key}; }
+  if (exists $global_env{$$key}) { return $global_env{$$key}; }
   fail("Not found in environment: ", $key);
 }
 
@@ -109,7 +121,7 @@ sub extend_ctx($$$) {
   }
   my %new_map = ();
   for my $i (0 .. $#{$params}) {
-    $new_map{$params->[$i]} = $args->[$i];
+    $new_map{${$params->[$i]}} = $args->[$i];
   }
   my $new_ctx = [\%new_map, @$ctx];
   return $new_ctx;
@@ -140,62 +152,65 @@ sub do_eval($$) {
   print "Evaluating " . (to_string $e) . " in ctx " . (to_string $ctx) . "; " .  (to_string \%global_env) . "\n";
 
   if (ref $e eq "Num") { return $e; }
-  if (ref $e eq "Sym") { return env_lookup($ctx, $e); }
+  if (ref $e eq "Sym") { return ctx_lookup($ctx, $e); }
   if (ref $e eq "ARRAY") {
     if (scalar @$e == 0) { return $e; }
     my @tl = @$e;
-    my $hd = shift @tl;
-    if ($hd eq "progn") {
-      if (scalar @tl == 0) { return []; }
-      my @results = map { do_eval($ctx, $_); } @tl;
-      return $results[-1];
-    }
-    if ($hd eq "quote") {
-      scalar @tl == 1 or fail("Quote applied wrong number of args in exp: ", $e);
-      return $tl[0];
-    }
-    if ($hd eq "lambda") {
-      ref $tl[0] eq "ARRAY" or fail("Lambda arglist not array in exp: ", $e);
-      my @params = @{$tl[0]};
-      my @body = @tl;
-      $body[0] = Sym("progn");
-      return sub(@) {
-        my $newctx = extend_ctx($ctx, \@params, \@_);
-        return do_eval($newctx, \@body);
-      };
-    }
-    if ($hd eq "define") {
-      my ($name, $value);
-      if (ref $tl[0] eq "Sym") {
-        scalar @tl == 2 or fail("Define of symbol with wrong number of args in exp: ", $e);
-        $name = $tl[0];
-        $value = do_eval($ctx, $tl[1]);
-      } elsif (ref $tl[0] eq "ARRAY") {
-        scalar @{$tl[0]} != 0 or fail("Define of nil: ", $e);
-        $name = $tl[0][0];
+    my $head = shift @tl;
+    if (ref $head eq "Sym") {
+      my $hd = $$head;
+      if ($hd eq "progn") {
+        if (scalar @tl == 0) { return []; }
+        my @results = map { do_eval($ctx, $_); } @tl;
+        return $results[-1];
+      }
+      if ($hd eq "quote") {
+        scalar @tl == 1 or fail("Quote applied wrong number of args in exp: ", $e);
+        return $tl[0];
+      }
+      if ($hd eq "lambda") {
+        ref $tl[0] eq "ARRAY" or fail("Lambda arglist not array in exp: ", $e);
         my @params = @{$tl[0]};
-        shift @params;
         my @body = @tl;
         $body[0] = Sym("progn");
-        $value = sub(@) {
+        return sub(@) {
           my $newctx = extend_ctx($ctx, \@params, \@_);
           return do_eval($newctx, \@body);
         };
-      } else { fail("Bad define: ", $e); }
-      global_env{$name} = $value;
-      return $value;
-    }
-    if ($hd eq "setq") {
-      if (scalar @tl != 2) { fail("Setq applied to wrong number of args in exp: ", $e); }
-      my $val = do_eval($ctx, $tl[1]);
-      ctx_mutate($ctx, $tl[0], $val);
-      return $val;
-    }
-    if ($hd eq "cond") {
-      return do_cond($ctx, \@tl);
+      }
+      if ($hd eq "define") {
+        my ($name, $value);
+        if (ref $tl[0] eq "Sym") {
+          scalar @tl == 2 or fail("Define of symbol with wrong number of args in exp: ", $e);
+          $name = $tl[0];
+          $value = do_eval($ctx, $tl[1]);
+        } elsif (ref $tl[0] eq "ARRAY") {
+          scalar @{$tl[0]} != 0 or fail("Define of nil: ", $e);
+          $name = $tl[0][0];
+          my @params = @{$tl[0]};
+          shift @params;
+          my @body = @tl;
+          $body[0] = Sym("progn");
+          $value = sub(@) {
+            my $newctx = extend_ctx($ctx, \@params, \@_);
+            return do_eval($newctx, \@body);
+          };
+        } else { fail("Bad define: ", $e); }
+        $global_env{$$name} = $value;
+        return $value;
+      }
+      if ($hd eq "setq") {
+        if (scalar @tl != 2) { fail("Setq applied to wrong number of args in exp: ", $e); }
+        my $val = do_eval($ctx, $tl[1]);
+        ctx_mutate($ctx, $tl[0], $val);
+        return $val;
+      }
+      if ($hd eq "cond") {
+        return do_cond($ctx, \@tl);
+      }
     }
     # Function application
-    my $f = do_eval($ctx, $hd);
+    my $f = do_eval($ctx, $head);
     my @args = map { do_eval($ctx, $_) } @tl;
     return $f->(@args);
   }
