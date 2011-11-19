@@ -11,10 +11,6 @@ ctx : type.
 empty : ctx.
 bind : sexp -> sexp -> ctx -> ctx.
 
-estring : type.
-enil : estring.
-econs : string -> estring -> estring.
-
 parse-sym-char : string -> type.
 parse-sym-char/a : parse-sym-char "a".
 parse-sym-char/b : parse-sym-char "b".
@@ -86,10 +82,28 @@ parse-digit/7 : parse-digit "7" 7.
 parse-digit/8 : parse-digit "8" 8.
 parse-digit/9 : parse-digit "9" 9.
 
+bool : type.
+true : bool.
+false : bool.
+
+parse-digit-c : string -> bool -> type.
+parse-digit-c/yes : parse-digit-c X true
+                    <- parse-digit X _.
+parse-digit-c/no : parse-digit-c X false.
+
+parse-nondigit : string -> type.
+parse-nondigit/yes : parse-nondigit X
+                     <- parse-digit-c X false.
+
 parse-white : string -> type.
 parse-white/none : parse-white "".
 parse-white/++ : parse-white (" " ++ Y)
                  <- parse-white Y.
+
+parse-real-white : string -> type.
+parse-real-white/spc : parse-real-white " ".
+parse-real-white/++ : parse-real-white (" " ++ Y)
+                      <- parse-real-white Y.
 
 parse-char : string -> type.
 parse-char/SYM : parse-char S
@@ -100,90 +114,36 @@ parse-char/SP : parse-char " ".
 parse-char/DIGIT : parse-char D
                    <- parse-digit D _.
 
-explode : string -> estring -> type.
-explode/empty : explode "" enil.
-explode/++ : explode (A ++ B) (econs A B')
-             <- parse-char A
-             <- explode B B'.
-
 % First integer is an accumulator initialized to 0.
 parse-int : string -> integer -> integer -> type.
-parse-int/enil : parse-int "" Acc Acc.
-parse-int/econs : parse-int (X ++ Rest) Acc Ntot
-                  <- parse-digit X NX
-                  <- parse-int Rest (10 * Acc + NX) Ntot.
+% Putting more before dig makes the parser greedy. Doing it the other way fails
+%   miserably, turning every digit into its own number.
+parse-int/more : parse-int (X ++ Rest) Acc Ntot
+                 <- parse-digit X NX
+                 <- parse-int Rest (10 * Acc + NX) Ntot.
+% Require at least one digit to parse as an integer.
+parse-int/dig : parse-int X Acc (10 * Acc + NX)
+                <- parse-digit X NX.
 
 parse-sym : string -> type.
+% Putting ++ before c makes the parser greedy. Doing it the other way fails
+%   miserably, turning every char into its own symbol.
+parse-sym/++ : parse-sym (X ++ Y)
+               <- parse-sym-char Y
+               <- parse-sym X.
 parse-sym/c : parse-sym X
               <- parse-sym-char X.
-parse-sym/++ : parse-sym (X ++ Y)
-               <- parse-sym X
-               <- parse-sym-char Y.
 
-token : type.
-t_lparen : token.
-t_rparen : token.
-t_num : integer -> token.
-t_sym : string -> token.
-
-tlist : type.
-tnil : tlist.
-tcons : token -> tlist -> tlist.
-
-% Second string is accum
-tokenize : estring -> tlist -> type.
-tokenize-num : estring -> string -> tlist -> type.
-tokenize-sym : estring -> string -> tlist -> type.
-
-tokenize/none : tokenize enil tnil.
-tokenize/white : tokenize (econs " " Rest) Trec
-                 <- tokenize Rest Trec.
-tokenize/num : tokenize (econs D Rest) Trec
-               <- parse-digit D _
-               <- tokenize-num Rest D Trec.
-tokenize/sym : tokenize (econs S Rest) Trec
-               <- parse-sym-char S
-               <- tokenize-sym Rest S Trec.
-tokenize/lp : tokenize (econs "(" Rest) (tcons t_lparen Trec)
-              <- tokenize Rest Trec.
-tokenize/rp : tokenize (econs ")" Rest) (tcons t_rparen Trec)
-              <- tokenize Rest Trec.
-
-tokenize-num/empty : tokenize-num enil N (tcons (t_num Num) tnil)
-                     <- parse-int N 0 Num.
-tokenize-num/digit : tokenize-num (econs D Rest) N Trec
-                     <- parse-digit D _
-                     <- tokenize-num Rest (N ++ D) Trec.
-tokenize-num/other : tokenize-num (econs X Rest) N (tcons (t_num Num) Trec)
-                     <- parse-int N 0 Num
-                     <- tokenize (econs X Rest) Trec.
-
-tokenize-sym/empty : tokenize-sym enil S (tcons (t_sym S) tnil).
-tokenize-sym/char : tokenize-sym (econs C Rest) S Trec
-                    <- parse-sym-char C
-                    <- tokenize-sym Rest (S ++ C) Trec.
-tokenize-sym/other : tokenize-sym (econs X Rest) S (tcons (t_sym S) Trec)
-                     <- tokenize (econs X Rest) Trec.
-
-%define x = X
-%solve _ : explode "(55 ABC 767 23) " X.
-%solve _ : tokenize x _.
-
-%% XXX %%
 parse : string -> sexp -> type.
-%% XXX %%
-
-append : estring -> estring -> estring -> type.
-append/enil : append enil X X.
-append/econs : append (econs A B) X (econs A Y)
-               <- append B X Y.
-
 parse-list : string -> sexp -> type.
+
 parse-list/nil : parse-list X nil
                  <- parse-white X.
+parse-list/single : parse-list X (cons A nil)
+                    <- parse X A.
 parse-list/cons : parse-list (X ++ Y ++ Z) (cons A B)
                   <- parse X A
-                  <- parse-white Y
+                  <- parse-real-white Y
                   <- parse-list Z B.
  
 parse/number : parse X (num NX)
@@ -193,7 +153,7 @@ parse/sym : parse X (sym X)
 parse/list : parse ("(" ++ L ++ ")") List
              <- parse-list L List.
 
-% solve D : parse "()" X.
+%solve D : parse "(progn (define (fact n) (cond ((eq n 0) 1) (1 (* n (fact (- n 1)))))) (fact 5))" X.
 
 lookup : ctx -> sexp -> sexp -> type.
 lookup/found : lookup (bind K V _) K V.
