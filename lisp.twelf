@@ -70,48 +70,6 @@ parse-sym-char/- : parse-sym-char "-".
 parse-sym-char/+ : parse-sym-char "+".
 parse-sym-char/* : parse-sym-char "*".
 
-%{
-bool : type.
-true : bool.
-false : bool.
-
-isfalse : bool -> type.
-isfalse/f : isfalse false.
-
-istrue : bool -> type.
-istrue/t : istrue true.
-
-empty-bool : string -> bool -> type.
-empty-bool/empty : empty-bool "" true.
-empty-bool/other : empty-bool _ false.
-%%deterministic empty-bool.
-
-not-empty : string -> type.
-not-empty/ne : not-empty X
-               <- empty-bool X Y
-               <- isfalse Y.
-
-%solve DIDID : not-empty "asdf".
-
-% BUG: Doesn't fucking work, and I don't fucking know why.
-one-char-bool : string -> bool -> type.
-one-char-bool/empty : one-char-bool "" false.
-one-char-bool/two : one-char-bool (X ++ Y) false
-                    <- not-empty X.
-                    <- not-empty Y.
-one-char-bool/other : one-char-bool _ true.
-%%deterministic one-char-bool.
-
-one-char : string -> type.
-one-char/oc : one-char X
-              <- one-char-bool X Y
-              <- istrue Y.
-
-%solve DODOD : one-char-bool "asdfasdfasdfasdf" _.
-
-parse-sym-char : string -> type.
-}%
-
 parse-digit : string -> integer -> type.
 parse-digit/0 : parse-digit "0" 0.
 parse-digit/1 : parse-digit "1" 1.
@@ -124,62 +82,10 @@ parse-digit/7 : parse-digit "7" 7.
 parse-digit/8 : parse-digit "8" 8.
 parse-digit/9 : parse-digit "9" 9.
 
-%{
-is-digit : string -> type.
-is-digit/x : is-digit X
-             <- parse-digit X _.
-
-is-digit-bool : string -> bool -> type.
-is-digit-bool/digit : is-digit-bool D true
-                      <- is-digit D.
-is-digit-bool/other : is-digit-bool _ false.
-%deterministic is-digit-bool.
-
-not-digit : string -> type.
-not-digit/nd : not-digit X
-               <- is-digit-bool X Y
-               <- isfalse Y.
-}%
-
 parse-white : string -> type.
 parse-white/none : parse-white "".
 parse-white/++ : parse-white (" " ++ Y)
                  <- parse-white Y.
-
-%{
-is-white-bool : string -> bool -> type.
-is-white-bool/white : is-white-bool W true
-                      <- parse-white W.
-is-white-bool/other : is-white-bool _ false.
-%deterministic is-white-bool.
-
-not-white : string -> type.
-not-white/nw : not-white X
-               <- is-white-bool X Y
-               <- isfalse Y.
-
-is-paren-bool : string -> bool -> type.
-is-paren-bool/lp : is-paren-bool "(" true.
-is-paren-bool/rp : is-paren-bool ")" true.
-is-paren-bool/other : is-paren-bool _ false.
-%deterministic is-paren-bool.
-
-is-sym-char-bool : string -> bool -> type.
-is-sym-char-bool/white : is-sym-char-bool " " false.
-is-sym-char-bool/lp : is-sym-char-bool "(" false.
-is-sym-char-bool/rp : is-sym-char-bool ")" false.
-is-sym-char-bool/digit : is-sym-char-bool X false
-                          <- is-digit X.
-is-sym-char-bool/other-char : is-sym-char-bool X true
-                              <- one-char X.
-is-sym-char-bool/other : is-sym-char-bool X false.
-%deterministic is-sym-char-bool.
-
-parse-sym-char : string -> type.
-parse-sym-char/sc : parse-sym-char X
-                    <- is-sym-char-bool X Y
-                    <- istrue Y.
-}%
 
 parse-real-white : string -> type.
 parse-real-white/spc : parse-real-white " ".
@@ -244,4 +150,3 @@ lookup/rest : lookup (bind _ _ C) K V
 eval : ctx -> sexp -> sexp -> type.
 eval/num : eval _ (num N) (num N).
 eval/nil : eval _ nil nil.
-
