@@ -1,0 +1,140 @@
+nat : type.
+z : nat.
+s : nat -> nat.
+
+% nat is a type.
+% z is a term of type nat.
+% s is a term constructor of type nat -> nat.
+
+even : nat -> type.
+even-z : even z.
+even-s : even N -> even (s (s N)).
+
+% even is a predicate (prop constructor) of kind nat -> prop. 
+% even-z is a proof term of prop even z.
+% even-s is a proof term constructor of type even N -> even (s (s N)). (That
+%   is, it takes a proof of even N, and returns a proof of even (s (s N)).
+
+plus : nat -> nat -> nat -> type.
+plus-z : plus z N2 N2.
+plus-s : plus (s N1) N2 (s N3) <- plus N1 N2 N3.
+d2+1i = plus-s (plus-s plus-z).
+
+% plus is a relation (prop constructor) of kind nat -> nat -> nat -> prop. As a
+% logic function, it takes two nats and returns their sum, a nat. It represents
+% the proposition that the sum of the first two nats is the third nat.
+
+% plus-z is a proof term of prop plus z N2 N2. (Due to implicit paramter N2, it
+%   is actually a proof term constructor of type {N2:nat} plus z N2 N2; that
+%   is, given a nat N2, it returns a proof of plus z N2 N2.)
+% plus-s is a proof-term constructor of type plus N1 N2 N3 -> plus (s N1) N2 (s
+%   N3). It is a proof that plus N1 N2 N3 implies plus (s N1) N2 (s N3).
+
+% d2+li is the proof that 1 + 2 = 3. (It is actually generalized to a proof
+%   that N + 2 = s (s N).)
+
+%mode plus +N1 +N2 -N3.
+%worlds () (plus _ _ _).
+
+%total N1 (plus N1 _ _).
+
+% The relation 'plus' has now been checked for totality at mode
+%   forall-exists-exists. This means it is sort of a function of its first two
+%   arguments. (It is total in them, at least.)
+
+%solve D : plus (s z) (s z) N.
+
+% This asks twelf to find a proposition of the form (1+1 = N), saving N and the
+%   proof term D. The totality of plus implies that this will succeed.
+
+sum-evens : even N1 -> even N2 -> plus N1 N2 N3 -> even N3 -> type.
+sez : sum-evens even-z (DevenN2 : even N2) (plus-z : plus z N2 N2) DevenN2.
+ses : sum-evens ( (even-s DevenN1) : even (s (s N1)) )
+                (DevenN2 : even N2)
+                ( (plus-s (plus-s Dplus)) : plus (s (s N1)) N2 (s (s N3)) )
+                (even-s DevenN3 )
+                <- sum-evens DevenN1 DevenN2 Dplus DevenN3.
+
+% sum-evens is a relation (prop constructor) of kind even N1 -> even N2 ->
+%   plus N1 N2 N3 -> even N3 -> prop. It represents the proposition that (even
+%   N1 and even N2 and plus N1 N2 N3) implies even N3. It is a
+%   logic-programming function from proof terms that N1 and N2 are even, and
+%   N1+N2=N3, to a proof term that N3 is even.
+
+% sez is a proof term of prop sum-evens even-z DevenN2 plus-z DevenN2. It is a
+%   proof that (even z and even N2 and plus z N2) implies that (even N2).
+
+% ses is a proof term constructor, of type
+%   (sum-evens DevenN1 DevenN2 Dplus DevenN3)
+%   -> ( (even-s DevenN1) DevenN2 (plus-s (plus-s Dplus)) -> (even-s DevenN3).
+%
+%   It is a proof that, if the "sum-evens" theorem holds for (even N1), (even
+%   N2), (plus N1 N2 N3), and (even N3), THEN even (s (s N1)) and (even N2) and (plus (s (s N1))
+%   N2 (s (s N3)))  implies  (even (s (s N3))).
+%
+%   Wug.
+
+%mode sum-evens +D1 +D2 +Dplus -D3.
+%worlds () (sum-evens _ _ _ _).
+
+%total D1 (sum-evens D1 _ _ _).
+
+plus-z-right : {N2:nat} plus N2 z N2 -> type.
+pzrz : plus-z-right z (plus-z : (plus z z z)).
+pzrs : plus-z-right (s N) ((plus-s Dplus) : (plus (s N) z (s N)))
+       <- plus-z-right N (Dplus : (plus N z N)).
+%mode plus-z-right +N -D.
+%worlds () (plus-z-right _ _).
+%total N (plus-z-right N D).
+
+% plus-z-right is a relation (prop constructor) of kind plus N2 z N2 -> prop.
+%  It represents the propsition that (plus N2 z N2). It is a logic-programming
+%  function from a nat N2 to a proof term that plus N2 z N2.
+
+plus-s-right : plus N1 N2 N3 -> plus N1 (s N2) (s N3) -> type.
+psrz : plus-s-right (plus-z : plus z N N) (plus-z : plus z (s N) (s N)).
+psrs : plus-s-right (plus-s Dplus : plus (s N1) N2 (s N3))
+                    (plus-s Dplus' : plus (s N1) (s N2) (s (s N3)))
+       <- plus-s-right (Dplus : plus N1 N2 N3) (Dplus' : plus N1 (s N2) (s N3)).
+%mode plus-s-right +D1 -D2.
+%worlds () (plus-s-right _ _).
+%total D1 (plus-s-right D1 _).
+
+plus-comm : plus N1 N2 N3 -> plus N2 N1 N3 -> type.
+plcz : plus-comm (plus-z : plus z N2 N2) Dplus
+       <- plus-z-right N2 Dplus.
+plcs : plus-comm (plus-s Dplusl : plus (s N1) N2 (s N3)) 
+                 (Dplus' : plus N2 (s N1) (s N3))
+       <- plus-comm (Dplusl : plus N1 N2 N3) (Dplusr : plus N2 N1 N3)
+       <- plus-s-right Dplusr (Dplus' : plus N2 (s N1) (s N3)).
+%mode plus-comm +D1 -D2.
+%worlds () (plus-comm _ _).
+%total D1 (plus-comm D1 _).
+
+odd : nat -> type.
+odd-1 : odd (s z).
+odd-s : odd N -> odd (s (s N)).
+
+succ-even : even N -> odd (s N) -> type.
+succ-even/z : succ-even even-z odd-1.
+succ-even/s : succ-even (even-s De) (odd-s Do)
+              <- succ-even De Do.
+%mode succ-even +D1 -D2.
+%worlds () (succ-even _ _).
+%total D1 (succ-even D1 _).
+
+succ-odd : odd N -> even (s N) -> type.
+succ-odd/z : succ-odd odd-1 (even-s even-z).
+succ-odd/s : succ-odd (odd-s Do) (even-s De)
+              <- succ-odd Do De.
+%mode succ-odd +D1 -D2.
+%worlds () (succ-odd _ _).
+%total D1 (succ-odd D1 _).
+
+sum-even-odd : even N1 -> odd N2 -> plus N1 N2 N3 -> odd N3 -> type.
+sum-even-odd/z : sum-even-odd even-z Do Dplus Do.
+sum-even-odd/s : sum-even-odd (even-s De) Do (plus-s (plus-s Dplus)) (odd-s DIH)
+                <- sum-even-odd De Do Dplus DIH.
+%mode sum-even-odd +De +Do +Dplus -Dsum.
+%worlds () (sum-even-odd _ _ _ _).
+%total De (sum-even-odd De _ _ _).

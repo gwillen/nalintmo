@@ -1,0 +1,206 @@
+%use equality/integers.
+%use equality/strings.
+
+sexp : type.
+num : integer -> sexp.
+sym : string -> sexp.
+nil : sexp.
+cons : sexp -> sexp -> sexp.
+
+ctx : type.
+empty : ctx.
+bind : sexp -> sexp -> ctx -> ctx.
+
+estring : type.
+enil : estring.
+econs : string -> estring -> estring.
+
+parse-sym-char : string -> type.
+parse-sym-char/a : parse-sym-char "a".
+parse-sym-char/b : parse-sym-char "b".
+parse-sym-char/c : parse-sym-char "c".
+parse-sym-char/d : parse-sym-char "d".
+parse-sym-char/e : parse-sym-char "e".
+parse-sym-char/f : parse-sym-char "f".
+parse-sym-char/g : parse-sym-char "g".
+parse-sym-char/h : parse-sym-char "h".
+parse-sym-char/i : parse-sym-char "i".
+parse-sym-char/j : parse-sym-char "j".
+parse-sym-char/k : parse-sym-char "k".
+parse-sym-char/l : parse-sym-char "l".
+parse-sym-char/m : parse-sym-char "m".
+parse-sym-char/n : parse-sym-char "n".
+parse-sym-char/o : parse-sym-char "o".
+parse-sym-char/p : parse-sym-char "p".
+parse-sym-char/q : parse-sym-char "q".
+parse-sym-char/r : parse-sym-char "r".
+parse-sym-char/s : parse-sym-char "s".
+parse-sym-char/t : parse-sym-char "t".
+parse-sym-char/u : parse-sym-char "u".
+parse-sym-char/v : parse-sym-char "v".
+parse-sym-char/w : parse-sym-char "w".
+parse-sym-char/x : parse-sym-char "x".
+parse-sym-char/y : parse-sym-char "y".
+parse-sym-char/z : parse-sym-char "z".
+parse-sym-char/z : parse-sym-char "z".
+parse-sym-char/A : parse-sym-char "A".
+parse-sym-char/B : parse-sym-char "B".
+parse-sym-char/C : parse-sym-char "C".
+parse-sym-char/D : parse-sym-char "D".
+parse-sym-char/E : parse-sym-char "E".
+parse-sym-char/F : parse-sym-char "F".
+parse-sym-char/G : parse-sym-char "G".
+parse-sym-char/H : parse-sym-char "H".
+parse-sym-char/I : parse-sym-char "I".
+parse-sym-char/J : parse-sym-char "J".
+parse-sym-char/K : parse-sym-char "K".
+parse-sym-char/L : parse-sym-char "L".
+parse-sym-char/M : parse-sym-char "M".
+parse-sym-char/N : parse-sym-char "N".
+parse-sym-char/O : parse-sym-char "O".
+parse-sym-char/P : parse-sym-char "P".
+parse-sym-char/Q : parse-sym-char "Q".
+parse-sym-char/R : parse-sym-char "R".
+parse-sym-char/S : parse-sym-char "S".
+parse-sym-char/T : parse-sym-char "T".
+parse-sym-char/U : parse-sym-char "U".
+parse-sym-char/V : parse-sym-char "V".
+parse-sym-char/W : parse-sym-char "W".
+parse-sym-char/X : parse-sym-char "X".
+parse-sym-char/Y : parse-sym-char "Y".
+parse-sym-char/Z : parse-sym-char "Z".
+parse-sym-char/_ : parse-sym-char "_".
+parse-sym-char/- : parse-sym-char "-".
+parse-sym-char/+ : parse-sym-char "+".
+parse-sym-char/* : parse-sym-char "*".
+
+parse-digit : string -> integer -> type.
+parse-digit/0 : parse-digit "0" 0.
+parse-digit/1 : parse-digit "1" 1.
+parse-digit/2 : parse-digit "2" 2.
+parse-digit/3 : parse-digit "3" 3.
+parse-digit/4 : parse-digit "4" 4.
+parse-digit/5 : parse-digit "5" 5.
+parse-digit/6 : parse-digit "6" 6.
+parse-digit/7 : parse-digit "7" 7.
+parse-digit/8 : parse-digit "8" 8.
+parse-digit/9 : parse-digit "9" 9.
+
+parse-white : string -> type.
+parse-white/none : parse-white "".
+parse-white/++ : parse-white (" " ++ Y)
+                 <- parse-white Y.
+
+parse-char : string -> type.
+parse-char/SYM : parse-char S
+                 <- parse-sym-char S.
+parse-char/LPAR : parse-char "(".
+parse-char/RPAR : parse-char ")".
+parse-char/SP : parse-char " ".
+parse-char/DIGIT : parse-char D
+                   <- parse-digit D _.
+
+explode : string -> estring -> type.
+explode/empty : explode "" enil.
+explode/++ : explode (A ++ B) (econs A B')
+             <- parse-char A
+             <- explode B B'.
+
+% First integer is an accumulator initialized to 0.
+parse-int : string -> integer -> integer -> type.
+parse-int/enil : parse-int "" Acc Acc.
+parse-int/econs : parse-int (X ++ Rest) Acc Ntot
+                  <- parse-digit X NX
+                  <- parse-int Rest (10 * Acc + NX) Ntot.
+
+parse-sym : string -> type.
+parse-sym/c : parse-sym X
+              <- parse-sym-char X.
+parse-sym/++ : parse-sym (X ++ Y)
+               <- parse-sym X
+               <- parse-sym-char Y.
+
+token : type.
+t_lparen : token.
+t_rparen : token.
+t_num : integer -> token.
+t_sym : string -> token.
+
+tlist : type.
+tnil : tlist.
+tcons : token -> tlist -> tlist.
+
+% Second string is accum
+tokenize : estring -> tlist -> type.
+tokenize-num : estring -> string -> tlist -> type.
+tokenize-sym : estring -> string -> tlist -> type.
+
+tokenize/none : tokenize enil tnil.
+tokenize/white : tokenize (econs " " Rest) Trec
+                 <- tokenize Rest Trec.
+tokenize/num : tokenize (econs D Rest) Trec
+               <- parse-digit D _
+               <- tokenize-num Rest D Trec.
+tokenize/sym : tokenize (econs S Rest) Trec
+               <- parse-sym-char S
+               <- tokenize-sym Rest S Trec.
+tokenize/lp : tokenize (econs "(" Rest) (tcons t_lparen Trec)
+              <- tokenize Rest Trec.
+tokenize/rp : tokenize (econs ")" Rest) (tcons t_rparen Trec)
+              <- tokenize Rest Trec.
+
+tokenize-num/empty : tokenize-num enil N (tcons (t_num Num) tnil)
+                     <- parse-int N 0 Num.
+tokenize-num/digit : tokenize-num (econs D Rest) N Trec
+                     <- parse-digit D _
+                     <- tokenize-num Rest (N ++ D) Trec.
+tokenize-num/other : tokenize-num (econs X Rest) N (tcons (t_num Num) Trec)
+                     <- parse-int N 0 Num
+                     <- tokenize (econs X Rest) Trec.
+
+tokenize-sym/empty : tokenize-sym enil S (tcons (t_sym S) tnil).
+tokenize-sym/char : tokenize-sym (econs C Rest) S Trec
+                    <- parse-sym-char C
+                    <- tokenize-sym Rest (S ++ C) Trec.
+tokenize-sym/other : tokenize-sym (econs X Rest) S (tcons (t_sym S) Trec)
+                     <- tokenize (econs X Rest) Trec.
+
+%define x = X
+%solve _ : explode "(55 ABC 767 23) " X.
+%solve _ : tokenize x _.
+
+%% XXX %%
+parse : string -> sexp -> type.
+%% XXX %%
+
+append : estring -> estring -> estring -> type.
+append/enil : append enil X X.
+append/econs : append (econs A B) X (econs A Y)
+               <- append B X Y.
+
+parse-list : string -> sexp -> type.
+parse-list/nil : parse-list X nil
+                 <- parse-white X.
+parse-list/cons : parse-list (X ++ Y ++ Z) (cons A B)
+                  <- parse X A
+                  <- parse-white Y
+                  <- parse-list Z B.
+ 
+parse/number : parse X (num NX)
+               <- parse-int X 0 NX.
+parse/sym : parse X (sym X)
+            <- parse-sym X.
+parse/list : parse ("(" ++ L ++ ")") List
+             <- parse-list L List.
+
+% solve D : parse "()" X.
+
+lookup : ctx -> sexp -> sexp -> type.
+lookup/found : lookup (bind K V _) K V.
+lookup/rest : lookup (bind _ _ C) K V
+              <- lookup C K V.
+
+eval : ctx -> sexp -> sexp -> type.
+eval/num : eval _ (num N) (num N).
+eval/nil : eval _ nil nil.
+
