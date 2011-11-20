@@ -217,6 +217,7 @@ apply-prim/eq-nil : apply-prim G _ "eq" (cons X (cons Y nil)) G nil.
 apply-prim/+ : apply-prim G _ "+" (cons (num X) (cons (num Y) nil)) G (num (X + Y)).
 apply-prim/- : apply-prim G _ "-" (cons (num X) (cons (num Y) nil)) G (num (X - Y)).
 apply-prim/* : apply-prim G _ "*" (cons (num X) (cons (num Y) nil)) G (num (X * Y)).
+%deterministic apply-prim.
 
 % XXX Can probably extend this to catch anything that's not nil, and
 %   reintroduce the one-element special case in cond.
@@ -248,8 +249,10 @@ do-cond/progn : do-cond G L (cons (cons Cond Rest) _) G' V
               (bind (sym "*") (prim "*")
               empty)))))))))
 %define program = Program
-%%solve _ : parse "(progn (define (fact n) (cond ((eq n 0) 1) ((quote true) (* n (fact (- n 1)))))) (fact 0))" Program.
-%solve _ : parse "(progn (define (fact n) (cond ((eq n 0) 1) ((quote true) (* n (fact (- n 1)))))) (fact 0))" Program.
+%solve _ : parse "(progn (define (fact n) (cond ((eq n 0) 1) (true (* n (fact (- n 1)))))) (fact 5))" Program.
+%%solve _ : parse "(progn (define (fact n) (cond ((eq n 0) 1) (true (* n (- n 1))))) (fact 0))" Program.
+%%solve _ : parse "(cond ((eq 0 0) 1) (true 2))" Program.
+%%solve _ : parse "(eq 0 0)" Program.
 %%solve _ : parse "(progn (define (timesfive n) (* n 5)) (timesfive 5))" Program.
 %%solve _ : parse "(progn (define (id x y) (cons x (cons y ()))) (id car 1))" Program.
 %%solve _ : parse "(* 5 5)" Program.
