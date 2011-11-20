@@ -2,14 +2,18 @@
 %use equality/strings.
 
 sexp : type.
+env : type.
+
 num : integer -> sexp.
 sym : string -> sexp.
 nil : sexp.
 cons : sexp -> sexp -> sexp.
+func : env -> sexp -> sexp -> sexp. % env, params, body
+prim : string -> sexp.
 
-ctx : type.
-empty : ctx.
-bind : sexp -> sexp -> ctx -> ctx.
+empty : env.
+bind : sexp -> sexp -> env -> env.
+
 
 parse-sym-char : string -> type.
 parse-sym-char/a : parse-sym-char "a".
@@ -140,13 +144,112 @@ parse/sym : parse X (sym X)
 parse/list : parse ("(" ++ L ++ ")") List
              <- parse-list L List.
 
-%solve D : parse "(progn (define (fact n) (cond ((eq n 0) 1) (1 (* n (fact (- n 1)))))) (fact 5))" X.
+env-lookup : env -> sexp -> sexp -> type.
+env-lookup/found : env-lookup (bind K V _) K V.
+env-lookup/rest : env-lookup (bind K1 _ C) K V
+                  <- env-lookup C K V.
 
-lookup : ctx -> sexp -> sexp -> type.
-lookup/found : lookup (bind K V _) K V.
-lookup/rest : lookup (bind _ _ C) K V
-              <- lookup C K V.
+not-env-has : env -> sexp -> type.
+not-env-has/nil : not-env-has empty _.
+not-env-has/nope : not-env-has (bind K1 _ Rest) K
+                   <- not-env-has Rest K.
 
-eval : ctx -> sexp -> sexp -> type.
-eval/num : eval _ (num N) (num N).
-eval/nil : eval _ nil nil.
+ctx-lookup : env -> env -> sexp -> sexp -> type.
+ctx-lookup/g : ctx-lookup G L K V
+               <- env-lookup G K V.
+ctx-lookup/l : ctx-lookup G L K V
+               <- not-env-has G K
+               <- env-lookup L K V.
+
+% NB: binds in reverse order. That should never matter...
+bind-params : env -> sexp -> sexp -> env -> type.
+bind-params/nil : bind-params E nil nil E.
+bind-params/cons : bind-params E (cons K Params) (cons V Args) (bind K V E')
+                   <- bind-params E Params Args E'.
+
+% Global env, local env, exp, new global env, value
+eval : env -> env -> sexp -> env -> sexp -> type.
+do-progn : env -> env -> sexp -> env -> sexp -> type.
+do-cond : env -> env -> sexp -> env -> sexp -> type.
+eval-list : env -> env -> sexp -> env -> sexp -> type.
+apply-prim : env -> env -> string -> sexp -> env -> sexp -> type.
+
+eval/num : eval G _ (num N) G (num N).
+eval/nil : eval G _ nil G nil.
+eval/sym : eval G L (sym S) G V
+           <- ctx-lookup G L (sym S) V.
+eval/progn : eval G L (cons (sym "progn") Rest) G' Result
+             <- do-progn G L Rest G' Result.
+eval/lambda : eval G L (cons (sym "lambda") (cons Params Body)) G (func L Params (cons (sym "progn") Body)).
+eval/define : eval G L (cons (sym "define") (cons (sym K) (cons Exp nil))) (bind (sym K) V G') V
+              <- eval G L Exp G' V.
+eval/define-func : eval G L (cons (sym "define") (cons (cons K Params) Body)) (bind K (func L Params (cons (sym "progn") Body)) G) nil.
+eval/quote : eval G L (cons (sym "quote") (cons E nil)) G E.
+eval/cond : eval G L (cons (sym "cond") Clauses) G' V
+            <- do-cond G L Clauses G' V.
+eval/apply : eval G L (cons F Args) G''' V
+             <- eval G L F G' (func Env Params Body)
+             <- eval-list G' L Args G'' Args'
+             <- bind-params Env Params Args Env'
+             <- eval G'' Env' Body G''' V.
+eval/apply-primitive : eval G L (cons F Args) G''' V
+                       <- eval G L F G' (prim Prim)
+                       <- eval-list G' L Args G'' Args'
+                       <- apply-prim G'' L Prim Args G''' V.
+
+do-progn/nil : do-progn G _ nil G nil.
+do-progn/one : do-progn G L (cons E nil) G' V
+               <- eval G L E G' V.
+do-progn/rest : do-progn G L (cons E (cons X XS)) G'' V
+                <- eval G L E G' _
+                <- do-progn G' L (cons X XS) G'' V.
+
+eval-list/nil : eval-list G _ nil G nil.
+eval-list/cons : eval-list G L (cons E Rest) G'' (cons V Rest')
+                 <- eval G L E G' V
+                 <- eval-list G' L Rest G'' Rest'.
+
+apply-prim/car : apply-prim G _ "car" (cons (cons Car _) nil) G Car.
+apply-prim/cdr : apply-prim G _ "cdr" (cons (cons _ Cdr) nil) G Cdr.
+apply-prim/cons : apply-prim G _ "cons" (cons A (cons B nil)) G (cons A B).
+apply-prim/eq-t : apply-prim G _ "eq" (cons X (cons X nil)) G (sym "true").
+apply-prim/eq-nil : apply-prim G _ "eq" (cons X (cons Y nil)) G nil.
+apply-prim/+ : apply-prim G _ "+" (cons (num X) (cons (num Y) nil)) G (num (X + Y)).
+apply-prim/- : apply-prim G _ "-" (cons (num X) (cons (num Y) nil)) G (num (X - Y)).
+apply-prim/* : apply-prim G _ "*" (cons (num X) (cons (num Y) nil)) G (num (X * Y)).
+
+% XXX Can probably extend this to catch anything that's not nil, and
+%   reintroduce the one-element special case in cond.
+is-true : sexp -> type.
+is-true/t : is-true (sym "true").
+
+is-nil : sexp -> type.
+is-nil/nil : is-nil nil.
+
+do-cond/nil : do-cond G _ nil G nil.
+do-cond/false : do-cond G L (cons (cons Cond _) Clauses) G'' V
+                <- eval G L Cond G' X
+                <- is-nil X
+                <- do-cond G' L Clauses G'' V.
+do-cond/progn : do-cond G L (cons (cons Cond Rest) _) G' V
+                <- eval G L Cond G' X
+                <- is-true X
+                <- eval G L (cons (sym "progn") Rest) G' V.
+%deterministic do-cond.
+
+%define env = (bind (sym "nil") nil 
+              (bind (sym "true") (sym "true")
+              (bind (sym "car") (prim "car")
+              (bind (sym "cdr") (prim "cdr")
+              (bind (sym "cons") (prim "cons")
+              (bind (sym "eq") (prim "eq")
+              (bind (sym "+") (prim "+")
+              (bind (sym "-") (prim "-")
+              (bind (sym "*") (prim "*")
+              empty)))))))))
+%define program = Program
+%%solve _ : parse "(progn (define (fact n) (cond ((eq n 0) 1) ((quote true) (* n (fact (- n 1)))))) (fact 5))" Program.
+%solve _ : parse "(progn (define (timesfive n) (* n 5)) timesfive)" Program.
+%%solve _ : parse "(* 5 5)" Program.
+%%solve _ : parse "(progn (define (fact n) 1) 1 2 3)" Program.
+%solve _ : eval env empty program _ Result.
